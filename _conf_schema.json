@@ -1,0 +1,380 @@
+{
+  "comfyui_base_url": {
+    "type": "string",
+    "description": "ComfyUI 服务器地址",
+    "hint": "ComfyUI 的访问地址，例如 127.0.0.1:8188 或 http://192.168.1.10:8188。注意：是 AstrBot 所在的机器去访问它，不是协议端。",
+    "default": "127.0.0.1:8188"
+  },
+  "default_workflow": {
+    "type": "text",
+    "description": "默认工作流（API 格式 JSON）",
+    "hint": "在 ComfyUI 设置里开启「开发者模式（Dev mode）」后，用『保存(API格式) / Save (API Format)』导出的 JSON。把要动态替换的地方写成占位符，且占位符要用引号包裹：\"%prompt%\"（正向）、\"%negative_prompt%\"（负向）、\"%seed%\"、\"%width%\"、\"%height%\"、\"%steps%\"、\"%cfg%\"、\"%batch_size%\"。留空则使用内置的 SD1.5 文生图示例工作流。",
+    "default": "",
+    "editor_mode": true,
+    "editor_language": "json"
+  },
+  "extra_workflows": {
+    "type": "template_list",
+    "description": "额外的命名工作流（可选）",
+    "hint": "为不同风格/模型准备多套工作流。调用时用 -w 名称 选择，例如 /绘图 a cat -w anime。",
+    "templates": {
+      "workflow": {
+        "name": "工作流",
+        "display_item": "name",
+        "items": {
+          "name": {
+            "type": "string",
+            "description": "工作流名称",
+            "hint": "调用时用 -w 名称 选择。",
+            "default": ""
+          },
+          "workflow": {
+            "type": "text",
+            "description": "API 格式工作流 JSON",
+            "hint": "占位符规则同『默认工作流』。",
+            "default": "",
+            "editor_mode": true,
+            "editor_language": "json"
+          }
+        }
+      }
+    }
+  },
+  "workflow_dir": {
+    "type": "string",
+    "description": "工作流文件夹路径（可选）",
+    "hint": "填一个存放 ComfyUI『API 格式』工作流 .json 文件的文件夹，插件会自动把里面每个 .json 当成一套工作流，文件名（去掉 .json）即工作流名，用 -w 文件名 调用。例如 H:\\AI\\个人工作流（也可写成 H:/AI/个人工作流）。注意：这是 AstrBot 进程能直接读到的本地路径，所以该文件夹要和 AstrBot 在同一台机器上；改动/新增文件即时生效，无需重载插件。留空则只用下面配置里的工作流。",
+    "default": ""
+  },
+  "default_workflow_name": {
+    "type": "string",
+    "description": "默认使用哪套命名工作流（可选）",
+    "hint": "填工作流文件夹里的文件名（不含 .json），或下方 extra_workflows 里的名称。设置后，不带 -w 的 /绘图 就会用这套。留空则使用『默认工作流』那一栏的 JSON，再留空则用内置示例。",
+    "default": ""
+  },
+  "default_loras": {
+    "type": "list",
+    "description": "默认追加的 LoRA（每次绘图都加）",
+    "hint": "每行一个，格式 名称 或 名称:权重，如 myStyle:0.8。名称需与 ComfyUI loras 目录里的文件一致；不带扩展名时自动补 .safetensors。会以『仅模型』方式（LoraLoaderModelOnly）插入到工作流模型链最前端。留空则不加。",
+    "default": []
+  },
+  "default_lora_strength": {
+    "type": "float",
+    "description": "LoRA 默认权重（未写 :权重 时用）",
+    "default": 0.8
+  },
+  "default_negative_prompt": {
+    "type": "string",
+    "description": "默认负向提示词",
+    "hint": "用于含 %negative_prompt% 占位符的工作流或内置示例：未用 --neg 指定时填入此值。对从文件夹加载的原始工作流，会保留其自带的负向词，只有显式用 --neg 时才覆盖。",
+    "default": "lowres, bad anatomy, bad hands, text, error, missing fingers, worst quality, low quality, jpeg artifacts, watermark, signature"
+  },
+  "prompt_mode": {
+    "type": "string",
+    "description": "提示词与工作流已有文本的合并方式",
+    "hint": "仅对从文件夹加载的原始工作流生效。prepend（默认）：把你输入的提示词放在前面、保留节点里原有文本作为后缀——适合正向节点里写了 LoRA 触发词 / 质量词的情况（例如原文 “，xyz” 会变成 “你的提示词，xyz”）。append：原有文本在前、你的词在后。replace：直接用你的词覆盖原有文本。负向词（--neg）也按同样方式与已有负向合并。",
+    "default": "prepend",
+    "options": [
+      "prepend",
+      "append",
+      "replace"
+    ]
+  },
+  "enable_prompt_translation": {
+    "type": "bool",
+    "description": "中文自然语言自动转换",
+    "hint": "开启后，仅对下面指定的工作流，把中文自然语言自动整理为模型更容易理解的英文绘图词条。转换失败时会自动使用本地关键词扩展，不会阻断绘图。",
+    "default": true
+  },
+  "prompt_translation_workflows": {
+    "type": "list",
+    "description": "启用中文转换的工作流",
+    "hint": "每行填写一个工作流名称。默认只处理『鬼针草-中文』，不会影响其他工作流。",
+    "default": ["鬼针草-中文"]
+  },
+  "prompt_translation_provider_id": {
+    "type": "string",
+    "description": "中文转换使用的聊天模型 ID（可选）",
+    "hint": "留空时使用当前会话正在使用的 AstrBot 聊天模型；也可以填写一个固定 Provider ID。",
+    "default": ""
+  },
+  "prompt_translation_timeout": {
+    "type": "int",
+    "description": "中文转换超时时间（秒）",
+    "default": 30
+  },
+  "default_width": {
+    "type": "int",
+    "description": "默认宽度",
+    "hint": "下面这些尺寸/步数/CFG 默认值用于含占位符的工作流或内置示例。从文件夹加载的原始工作流默认沿用其自身保存的参数，只有在命令行显式用 --size / --steps / --cfg 时才覆盖。",
+    "default": 512
+  },
+  "default_height": {
+    "type": "int",
+    "description": "默认高度",
+    "default": 512
+  },
+  "default_steps": {
+    "type": "int",
+    "description": "默认采样步数",
+    "default": 20
+  },
+  "default_cfg": {
+    "type": "float",
+    "description": "默认 CFG",
+    "default": 7.0
+  },
+  "default_batch_size": {
+    "type": "int",
+    "description": "默认每次生成张数",
+    "default": 1
+  },
+  "max_batch_size": {
+    "type": "int",
+    "description": "允许的最大张数",
+    "hint": "防止用户用 --batch 一次性请求过多图片。",
+    "default": 4
+  },
+  "max_steps": {
+    "type": "int",
+    "description": "允许的最大采样步数",
+    "hint": "同时限制命令参数和工作流最终生效值，防止超大 steps 长时间占用显卡。",
+    "default": 150
+  },
+  "max_cfg": {
+    "type": "float",
+    "description": "允许的最大 CFG",
+    "hint": "拒绝 NaN、Infinity、负数及超过此值的 CFG 参数。",
+    "default": 100.0
+  },
+  "max_total_pixels": {
+    "type": "int",
+    "description": "单任务最大总像素量",
+    "hint": "按 宽×高×张数 计算；默认 8388608，相当于 1024×1024×8，用于降低显存耗尽风险。",
+    "default": 8388608
+  },
+  "max_prompt_length": {
+    "type": "int",
+    "description": "提示词最大字符数",
+    "default": 4000
+  },
+  "max_loras": {
+    "type": "int",
+    "description": "单任务最多叠加 LoRA 数量",
+    "default": 4
+  },
+  "max_lora_strength": {
+    "type": "float",
+    "description": "LoRA 权重绝对值上限",
+    "hint": "例如设为 2，则允许 -2 到 2。",
+    "default": 2.0
+  },
+  "max_input_size_mb": {
+    "type": "int",
+    "description": "单张输入图片体积上限（MB）",
+    "default": 20
+  },
+  "max_output_size_mb": {
+    "type": "int",
+    "description": "单个输出图片或视频体积上限（MB）",
+    "default": 100
+  },
+  "auto_randomize_seed": {
+    "type": "bool",
+    "description": "每次自动随机种子",
+    "hint": "开启后，若没有用 --seed 指定种子，则会为工作流中所有 seed/noise_seed 字段以及 %seed% 占位符生成同一个随机种子，避免每次出图都一样；用 --seed N 时则用 N 精确复现。关闭后将保留工作流里写死的种子。",
+    "default": true
+  },
+  "max_concurrent_tasks": {
+    "type": "int",
+    "description": "最大并发生成任务数",
+    "hint": "同时进行的绘图请求上限，超出的会排队。",
+    "default": 2
+  },
+  "timeout": {
+    "type": "int",
+    "description": "单次生成超时时间（秒）",
+    "default": 300
+  },
+  "show_progress": {
+    "type": "bool",
+    "description": "生成时发送『正在生成』提示",
+    "default": true
+  },
+  "auto_recall_progress": {
+    "type": "bool",
+    "description": "生成结束后自动撤回进度消息",
+    "hint": "开启后，本地 ComfyUI 和云端绘图在成功、失败或超时结束时都会自动撤回『正在生成』消息，只保留最终结果。当前平台不支持撤回时会静默跳过。",
+    "default": true
+  },
+  "progress_recall_delay_ms": {
+    "type": "int",
+    "description": "进度消息撤回延迟（毫秒）",
+    "hint": "生成结束后等待多久再撤回进度消息。默认 200 毫秒；可设为 0 立即撤回。",
+    "default": 200
+  },
+  "send_seed_info": {
+    "type": "bool",
+    "description": "出图后附带种子等参数信息",
+    "default": true
+  },
+  "openai_image_provider": {
+    "type": "string",
+    "description": "云端绘图接口类型",
+    "hint": "auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时自动尝试 /v1；chatgpt2api 会自动补全 /v1/images/generations，并默认使用 b64_json；openai-compatible 只在配置地址后拼接 /images/generations。",
+    "default": "auto",
+    "options": [
+      "auto",
+      "chatgpt2api",
+      "openai-compatible"
+    ]
+  },
+  "openai_image_base_url": {
+    "type": "string",
+    "description": "云端绘图 API 地址（/云绘图 用）",
+    "hint": "OpenAI 兼容的图片生成接口基址。chatgpt2api 模式可直接填写项目根地址（如 http://127.0.0.1:3000），也可填写带 /v1 的地址；留空则禁用云端绘图。",
+    "default": ""
+  },
+  "openai_quota_admin_only": {
+    "type": "bool",
+    "description": "云绘图额度仅管理员可查",
+    "hint": "开启后只有 AstrBot 管理员能用 /云绘图额度 查看 ChatGPT2API 账号池数量、剩余额度和运行统计，避免在群聊公开敏感信息。",
+    "default": true
+  },
+  "openai_image_api_key": {
+    "type": "string",
+    "description": "云端绘图 API Key",
+    "hint": "对应服务的密钥，会作为 Bearer Token 发送。注意：这种接口是按量付费的，调用会消耗你的额度。",
+    "default": ""
+  },
+  "openai_image_model": {
+    "type": "string",
+    "description": "云端绘图模型名",
+    "hint": "如 gpt-image-2。按你所用服务支持的模型填写。",
+    "default": "gpt-image-2"
+  },
+  "openai_image_size": {
+    "type": "string",
+    "description": "云端绘图默认尺寸",
+    "hint": "常用档位：1024x1024（方）、1024x1536（竖）、1536x1024（横）。GPT-Image 2 还支持符合限制的自定义宽高；命令里可用 --size 临时修改。图生图默认优先沿用原图分辨率。",
+    "default": "1024x1024"
+  },
+  "openai_image_quality": {
+    "type": "string",
+    "description": "云端绘图默认质量（quality）",
+    "hint": "留空则不发送该参数（用接口默认）。常见取值：standard / hd（DALL·E 3），gpt-image 系为 low / medium / high / auto，以你所用接口文档为准。命令里 --quality（-q）可临时改。",
+    "default": ""
+  },
+  "openai_image_style": {
+    "type": "string",
+    "description": "云端绘图默认画风（style）",
+    "hint": "留空则不发送该参数。常见取值：vivid（鲜艳生动）/ natural（自然），以接口文档为准。命令里 --style 可临时改。",
+    "default": ""
+  },
+  "openai_image_response_format": {
+    "type": "string",
+    "description": "云端绘图返回方式（response_format）",
+    "hint": "留空时普通接口使用服务默认值，chatgpt2api 模式自动使用 b64_json。可选 url 或 b64_json；插件两种都能解析。若图片链接过期或无法访问，使用 b64_json 更稳。",
+    "default": ""
+  },
+  "openai_image_edit_max_inputs": {
+    "type": "int",
+    "description": "云端图片编辑最多读取几张原图",
+    "hint": "引用或附带图片使用 /云绘图、/变手办 时生效。ChatGPT2API 支持多图编辑；默认最多读取 4 张，重复图片会自动忽略。",
+    "default": 4
+  },
+  "openai_image_edit_use_source_size": {
+    "type": "bool",
+    "description": "云端图生图沿用原图分辨率",
+    "hint": "开启后，未手动指定 --size 时会读取第一张原图的宽高作为输出尺寸。GPT-Image 2 会尽量保持原尺寸，并自动对齐到接口要求的 16 像素倍数；较旧模型会映射到最接近原图比例的固定档位。",
+    "default": true
+  },
+  "openai_image_timeout": {
+    "type": "int",
+    "description": "云端绘图超时时间（秒）",
+    "default": 180
+  },
+  "enable_access_control": {
+    "type": "bool",
+    "description": "启用白名单访问控制",
+    "hint": "开启后，只有『个人白名单』里的用户、『群白名单』里的群、以及 AstrBot 管理员（超级用户）能使用绘图（/绘图、/云绘图 及 AI 绘图工具）。关闭则所有人可用。绘图列表/状态/帮助等只读指令不受限。",
+    "default": false
+  },
+  "user_whitelist": {
+    "type": "list",
+    "description": "个人白名单（用户 ID）",
+    "hint": "允许使用绘图的用户 ID；这些用户在私聊和群聊都能用。用 /sid 指令可查到自己的 ID。每行填一个。",
+    "default": []
+  },
+  "group_whitelist": {
+    "type": "list",
+    "description": "群白名单（群 ID）",
+    "hint": "允许使用绘图的群 ID；这些群里的所有人都能用。每行填一个。",
+    "default": []
+  },
+  "access_deny_notice": {
+    "type": "bool",
+    "description": "无权限时回复提示",
+    "hint": "开启后，无权限用户触发绘图时会收到一句『无权限』提示；关闭则静默忽略（不回复）。",
+    "default": true
+  },
+  "daily_me_enabled": {
+    "type": "bool",
+    "description": "启用「二次元的我」（每日一抽）",
+    "hint": "开启后可用 /二次元的我（别名 /每日二次元）：按 用户ID+日期 随机抽取当天的二次元形象并出图，每人每天限一次（生成失败不计次，跨天自动重置）。管理员可用 /二次元的我重置 清空当日记录。",
+    "default": true
+  },
+  "daily_me_result_card": {
+    "type": "bool",
+    "description": "把「二次元的我」资料做成图片卡片",
+    "hint": "开启后，角色主题、形象、造型、场景、生成参数和图片预览会渲染成一张资料卡；随后仍会附带完整分辨率原图。卡片渲染失败会自动退回文字消息。",
+    "default": true
+  },
+  "daily_me_reply_source": {
+    "type": "bool",
+    "description": "引用回复「二次元的我」原消息",
+    "hint": "开启后，最终的资料卡和原图会引用用户发送的触发消息进行回复。",
+    "default": true
+  },
+  "daily_me_backend": {
+    "type": "string",
+    "description": "「二次元的我」生成来源",
+    "hint": "comfyui 使用下面指定的本地工作流；cloud 使用云绘图接口（包括 chatgpt2api）。切到 cloud 后仍保留每日限次、资料卡、引用回复和完整原图。",
+    "default": "comfyui",
+    "options": [
+      "comfyui",
+      "cloud"
+    ]
+  },
+  "daily_me_cloud_size": {
+    "type": "string",
+    "description": "「二次元的我」云绘图尺寸",
+    "hint": "仅在生成来源为 cloud 时使用。留空则沿用云绘图默认尺寸；常用值：1024x1024、1024x1536、1536x1024。",
+    "default": "1024x1024"
+  },
+  "daily_me_workflow": {
+    "type": "string",
+    "description": "「二次元的我」使用的工作流名",
+    "hint": "仅在生成来源为 comfyui 时使用。从工作流文件夹/额外工作流中按名字选择，默认「小叶子」。",
+    "default": "小叶子"
+  },
+  "daily_me_negative_prompt": {
+    "type": "string",
+    "description": "「二次元的我」专用负面词",
+    "hint": "默认抑制水印、文字、Logo、签名、用户名和常见肢体问题。可以自行修改；显式留空时沿用工作流原本的负面词。",
+    "default": "worst quality, low quality, lowres, blurry, jpeg artifacts, malformed hands, extra fingers, missing fingers, text, watermark, logo, signature, artist name, username, copyright notice, website address, QR code, subtitles"
+  },
+  "send_as_forward": {
+    "type": "bool",
+    "description": "生成的图片用合并转发发送",
+    "hint": "开启后 /绘图、/云绘图、/二次元的我 生成的图片会打包成一条合并转发消息发送：多图不刷屏，且能规避部分平台的图片风控。关闭时也可以在单次命令里加 --转发（或 --fw）临时启用。需要 OneBot/QQ 等支持合并转发的适配器；打包失败会自动退回普通发送。",
+    "default": false
+  },
+  "forward_sender_name": {
+    "type": "string",
+    "description": "合并转发里显示的发送者昵称",
+    "hint": "转发卡片内每条消息显示的名字，默认「AI画师」。可改成你的 bot 人设名，如「智乃」。",
+    "default": "AI画师"
+  }
+}
+
