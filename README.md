@@ -297,4 +297,3 @@ AstrBot/
 ## 工作原理
 
 提交 `POST /prompt` → 通过 `ws://.../ws` 监听执行完成 → `GET /history/{id}` 取输出 → `GET /view` 下载图片 → 用 AstrBot 消息链把图片发回会话。全程异步（aiohttp），不会阻塞机器人。
-

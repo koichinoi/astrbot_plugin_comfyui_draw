@@ -379,573 +379,9 @@ class ComfyUIDrawPlugin(Star):
         "--quality": "quality", "-q": "quality",
         "--style": "style",
         "--preset": "preset", "--é¢„è®¾": "preset",
-        "--fw": "forward", "--forward": "forward", "--è½¬å‘": "forward",
-    }
-    SIZE_PRESETS = {
-        "--æ¨ªå›¾": "1216x832",
-        "--landscape": "1216x832",
-        "--ç«–å›¾": "832x1216",
-        "--portrait": "832x1216",
-        "--æ–¹å›¾": "1024x1024",
-        "--square": "1024x1024",
-        "--å®½å›¾": "1344x768",
-        "--å®½å±": "1344x768",
-        "--wide": "1344x768",
-    }
-    CLOUD_SIZE_PRESETS = {
-        "--æ¨ªå›¾": "1536x1024",
-        "--landscape": "1536x1024",
-        "--ç«–å›¾": "1024x1536",
-        "--portrait": "1024x1536",
-        "--æ–¹å›¾": "1024x1024",
-        "--square": "1024x1024",
-        "--å®½å›¾": "1536x1024",
-        "--å®½å±": "1536x1024",
-        "--wide": "1536x1024",
-    }
-    CLOUD_PROMPT_PRESETS = {
-        "æ‰‹åŠž": {
-            "size": "1024x1024",
-            "desc": "æ”¶è—çº§ PVC æ‰‹åŠžäº§å“ç…§",
-            "prompt": (
-                "Turn the described subject into a premium 1/7-scale PVC collectible "
-                "figure. Preserve the subject's recognizable appearance, hairstyle, "
-                "clothing, colors, accessories, and personality. Show the complete "
-                "manufactured figurine standing on a tasteful display base, with realistic "
-                "painted plastic and resin materials, fine sculpted details, professional "
-                "studio product photography, softbox lighting, shallow depth of field, and "
-                "an elegant collector-box backdrop. Make it clearly a physical figurine, "
-                "not a real person. No watermark, logo, signature, or extra text. Subject: {subject}"
-            ),
-        },
-        "é»åœŸ": {
-            "size": "1024x1024",
-            "desc": "å¯çˆ± Q ç‰ˆé»åœŸäºº",
-            "prompt": (
-                "Reimagine the described subject as a cute handmade chibi polymer-clay "
-                "figurine. Preserve the key identity, colors, outfit, and accessories; use "
-                "a large expressive head, small body, visible handcrafted clay texture, "
-                "rounded forms, miniature diorama base, warm tabletop lighting, and crisp "
-                "macro photography. No watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "æ¯›ç»’": {
-            "size": "1024x1024",
-            "desc": "æŸ”è½¯å¯çˆ±çš„æ¯›ç»’çŽ©å¶",
-            "prompt": (
-                "Transform the described subject into an adorable premium plush toy. "
-                "Preserve recognizable colors, hairstyle, clothing motifs, and accessories; "
-                "use soft short-pile fabric, embroidered facial features, neat stitching, "
-                "rounded huggable proportions, cozy product photography, warm diffused "
-                "lighting, and a clean background. No watermark, logo, signature, or text. "
-                "Subject: {subject}"
-            ),
-        },
-        "å¤´åƒ": {
-            "size": "1024x1024",
-            "desc": "ç²¾è‡´ç¤¾äº¤å¤´åƒ",
-            "prompt": (
-                "Create a polished square profile avatar of the described subject. Use a "
-                "centered head-and-shoulders composition, a clear expressive face, flattering "
-                "soft lighting, refined detail, harmonious colors, a simple layered background, "
-                "and strong readability at small size. No frame, watermark, logo, signature, "
-                "or text. Subject: {subject}"
-            ),
-        },
-        "æµ·æŠ¥": {
-            "size": "1024x1536",
-            "desc": "ç«–ç‰ˆç”µå½±æ„Ÿå®£ä¼ æµ·æŠ¥",
-            "prompt": (
-                "Design a premium vertical cinematic promotional poster featuring the "
-                "described subject. Use a striking focal composition, dramatic lighting, "
-                "layered depth, atmospheric background elements, strong color grading, and "
-                "clean intentional negative space for an optional title. Do not invent words; "
-                "include no watermark, logo, signature, or text unless the subject description "
-                "explicitly requests exact wording. Subject: {subject}"
-            ),
-        },
-        "å£çº¸": {
-            "size": "1536x1024",
-            "desc": "æ¨ªç‰ˆç”µå½±æ„Ÿæ¡Œé¢å£çº¸",
-            "prompt": (
-                "Create a cinematic widescreen desktop wallpaper of the described subject. "
-                "Use a spacious landscape composition, place the main subject slightly off "
-                "center, add rich environmental storytelling, layered depth, detailed lighting, "
-                "and balanced areas that remain visually calm behind desktop icons. No border, "
-                "watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "è´´çº¸": {
-            "size": "1024x1024",
-            "desc": "ç²—æè¾¹æ¨¡åˆ‡è´´çº¸",
-            "prompt": (
-                "Turn the described subject into a cute die-cut sticker illustration. Use a "
-                "bold clean silhouette, expressive simâ€¦37275 tokens truncatedâ€¦de.get("inputs", {}) or {}).get("model")
-        if not (isinstance(ref, list) and ref):
-            return None
-        cur_id, slot = str(ref[0]), (ref[1] if len(ref) > 1 else 0)
-        visited = set()
-        for _ in range(max_hop):
-            cur = workflow.get(cur_id)
-            if not isinstance(cur, dict):
-                return [cur_id, slot]
-            cls = str(cur.get("class_type", ""))
-            if "lora" in cls.lower():
-                mref = (cur.get("inputs", {}) or {}).get("model")
-                if isinstance(mref, list) and mref and cur_id not in visited:
-                    visited.add(cur_id)
-                    cur_id, slot = str(mref[0]), (mref[1] if len(mref) > 1 else 0)
-                    continue
-                return [cur_id, slot]
-            return [cur_id, slot]
-        return [cur_id, slot]
-
-    @staticmethod
-    def _max_int_id(workflow):
-        mx = 0
-        for k in workflow.keys():
-            try:
-                mx = max(mx, int(str(k)))
-            except Exception:  # noqa: BLE001
-                pass
-        return max(mx, 1000)
-
-    # ------------------------------------------------------------------ #
-    # å‚æ•°è§£æž
-    # ------------------------------------------------------------------ #
-    def _parse_args(self, text: str, cloud: bool = False):
-        tokens = text.split()
-        opts = {
-            "negative": None, "size": None, "steps": None,
-            "cfg": None, "seed": None, "batch": None, "workflow": None,
-            "quality": None, "style": None, "preset": None, "forward": None,
-            "loras": [],
-        }
-        size_presets = self.CLOUD_SIZE_PRESETS if cloud else self.SIZE_PRESETS
-        positive = []
-        i, n = 0, len(tokens)
-        while i < n:
-            tok = tokens[i]
-            prompt_preset = (
-                self.CLOUD_PROMPT_PRESET_FLAGS.get(tok.lower()) if cloud else None
-            )
-            if prompt_preset:
-                opts["preset"] = prompt_preset
-                i += 1
-                continue
-            preset_size = size_presets.get(tok.lower())
-            if preset_size:
-                opts["size"] = preset_size
-                i += 1
-                continue
-            key = self.FLAG_ALIASES.get(tok.lower())
-            if key == "forward":
-                # å¸ƒå°”å¼€å…³ï¼šä¸åƒåŽé¢çš„å€¼
-                opts["forward"] = "1"
-                i += 1
-                continue
-            if key == "negative":
-                # è´Ÿå‘è¯æ”¶é›†åˆ°ä¸‹ä¸€ä¸ª flag ä¸ºæ­¢ï¼ˆå¯å¤šè¯ï¼‰
-                i += 1
-                vals = []
-                while (
-                    i < n
-                    and tokens[i].lower() not in self.FLAG_ALIASES
-                    and tokens[i].lower() not in size_presets
-                    and (
-                        not cloud
-                        or tokens[i].lower() not in self.CLOUD_PROMPT_PRESET_FLAGS
-                    )
-                ):
-                    vals.append(tokens[i])
-                    i += 1
-                opts["negative"] = " ".join(vals).strip()
-                continue
-            elif key == "lora":
-                # å¯é‡å¤ï¼š--lora åç§°[:æƒé‡]ï¼Œæ¯æ¬¡å–ä¸€ä¸ª token
-                if i + 1 < n:
-                    opts["loras"].append(tokens[i + 1])
-                    i += 2
-                else:
-                    i += 1
-                continue
-            elif key:
-                if i + 1 < n:
-                    opts[key] = tokens[i + 1]
-                    i += 2
-                else:
-                    i += 1
-                continue
-            else:
-                positive.append(tok)
-                i += 1
-        return " ".join(positive).strip(), opts
-
-    def _resolve_size(self, size_str):
-        dw = self._config_int("default_width", 512, 64, 2048)
-        dh = self._config_int("default_height", 512, 64, 2048)
-        if size_str:
-            for sep in ("x", "X", "*", "Ã—", "âœ•", "âœ–"):
-                if sep in size_str:
-                    a, _, b = size_str.partition(sep)
-                    try:
-                        return self._clamp_dim(int(a)), self._clamp_dim(int(b))
-                    except Exception:
-                        break
-        return self._round8(dw), self._round8(dh)
-
-    def _clamp_dim(self, v):
-        return self._round8(max(64, min(2048, int(v))))
-
-    @staticmethod
-    def _round8(v):
-        return int(round(int(v) / 8) * 8)
-
-    def _clamp_batch(self, v):
-        mx = self._config_int("max_batch_size", 4, 1, 100)
-        return max(1, min(mx, int(v)))
-
-    def _normalize_options(self, prompt, opts, cloud=False):
-        """ä¸¥æ ¼æ ¡éªŒç”¨æˆ·å¯æŽ§å‚æ•°ï¼Œé¿å…æ— æ•ˆå€¼æˆ–è¶…å¤§ä»»åŠ¡ç›´æŽ¥è¿›å…¥åŽç«¯ã€‚"""
-        out = dict(opts or {})
-        max_prompt = self._config_int("max_prompt_length", 4000, 100, 100000)
-        if len(str(prompt or "")) > max_prompt:
-            raise ComfyUIError(f"æç¤ºè¯è¿‡é•¿ï¼Œæœ€å¤šå…è®¸ {max_prompt} ä¸ªå­—ç¬¦ã€‚")
-
-        def parse_int(key, label, minimum, maximum):
-            value = out.get(key)
-            if value is None or value == "":
-                return
-            try:
-                parsed = int(str(value).strip())
-            except (TypeError, ValueError):
-                raise ComfyUIError(f"{label} å¿…é¡»æ˜¯æ•´æ•°ã€‚")
-            if not minimum <= parsed <= maximum:
-                raise ComfyUIError(f"{label} å¿…é¡»åœ¨ {minimum} åˆ° {maximum} ä¹‹é—´ã€‚")
-            out[key] = parsed
-
-        parse_int(
-            "batch",
-            "ç”Ÿæˆå¼ æ•°",
-            1,
-            self._config_int("max_batch_size", 4, 1, 100),
-        )
-        if cloud:
-            return out
-
-        parse_int(
-            "steps",
-            "é‡‡æ ·æ­¥æ•°",
-            1,
-            self._config_int("max_steps", 150, 1, 10000),
-        )
-        parse_int("seed", "ç§å­", 0, 2 ** 63 - 1)
-
-        cfg = out.get("cfg")
-        if cfg is not None and cfg != "":
-            try:
-                cfg = float(str(cfg).strip())
-            except (TypeError, ValueError):
-                raise ComfyUIError("CFG å¿…é¡»æ˜¯æ•°å­—ã€‚")
-            max_cfg = self._config_float("max_cfg", 100.0, 0.1, 1000.0)
-            if not math.isfinite(cfg) or not 0 <= cfg <= max_cfg:
-                raise ComfyUIError(f"CFG å¿…é¡»æ˜¯ 0 åˆ° {max_cfg:g} ä¹‹é—´çš„æœ‰é™æ•°å­—ã€‚")
-            out["cfg"] = cfg
-
-        size = out.get("size")
-        if size:
-            normalized = str(size)
-            for sep in ("X", "*", "Ã—", "âœ•", "âœ–"):
-                normalized = normalized.replace(sep, "x")
-            parts = normalized.split("x")
-            if len(parts) != 2:
-                raise ComfyUIError("å°ºå¯¸æ ¼å¼åº”ä¸º å®½xé«˜ï¼Œä¾‹å¦‚ 768x1024ã€‚")
-            try:
-                width, height = int(parts[0]), int(parts[1])
-            except ValueError:
-                raise ComfyUIError("å°ºå¯¸ä¸­çš„å®½å’Œé«˜å¿…é¡»æ˜¯æ•´æ•°ã€‚")
-            if not (64 <= width <= 2048 and 64 <= height <= 2048):
-                raise ComfyUIError("å®½å’Œé«˜éƒ½å¿…é¡»åœ¨ 64 åˆ° 2048 ä¹‹é—´ã€‚")
-            out["size"] = f"{self._round8(width)}x{self._round8(height)}"
-        return out
-
-    def _enforce_effective_limits(self, effective):
-        """æ ¡éªŒæœ€ç»ˆå·¥ä½œæµå‚æ•°ï¼Œè¿žå·¥ä½œæµè‡ªå¸¦çš„é«˜é£Žé™©å€¼ä¹Ÿçº³å…¥ä¿æŠ¤ã€‚"""
-        max_steps = self._config_int("max_steps", 150, 1, 10000)
-        steps = effective.get("steps")
-        if isinstance(steps, (int, float)) and not isinstance(steps, bool):
-            if not math.isfinite(float(steps)) or steps < 1 or steps > max_steps:
-                raise ComfyUIError(f"å·¥ä½œæµå®žé™…é‡‡æ ·æ­¥æ•°è¶…å‡ºå…è®¸èŒƒå›´ 1â€“{max_steps}ã€‚")
-
-        width, height = effective.get("width"), effective.get("height")
-        batch = effective.get("batch_size") or 1
-        numeric = (width, height, batch)
-        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in numeric):
-            total = int(width) * int(height) * int(batch)
-            max_pixels = self._config_int(
-                "max_total_pixels", 8388608, 262144, 1000000000
-            )
-            if total > max_pixels:
-                raise ComfyUIError(
-                    f"ä»»åŠ¡æ€»åƒç´ é‡ {total:,} è¶…è¿‡ä¸Šé™ {max_pixels:,}ï¼›"
-                    "è¯·å‡å°å°ºå¯¸æˆ–ç”Ÿæˆå¼ æ•°ã€‚"
-                )
-
-    def _config_int(self, key, default, minimum=None, maximum=None):
-        try:
-            value = int(self.config.get(key, default))
-        except (TypeError, ValueError):
-            value = int(default)
-        if minimum is not None:
-            value = max(minimum, value)
-        if maximum is not None:
-            value = min(maximum, value)
-        return value
-
-    def _config_float(self, key, default, minimum=None, maximum=None):
-        try:
-            value = float(self.config.get(key, default))
-        except (TypeError, ValueError):
-            value = float(default)
-        if not math.isfinite(value):
-            value = float(default)
-        if minimum is not None:
-            value = max(minimum, value)
-        if maximum is not None:
-            value = min(maximum, value)
-        return value
-
-    def _max_bytes(self, key, default_mb):
-        mb = self._config_int(key, default_mb, 1, 2048)
-        return mb * 1024 * 1024
-
-    @staticmethod
-    async def _read_limited(response, limit, label):
-        """æµå¼è¯»å–å“åº”ï¼Œé¿å…ä¸€ä¸ªå¼‚å¸¸å›¾ç‰‡/è§†é¢‘è€—å°½è¿›ç¨‹å†…å­˜ã€‚"""
-        length = response.headers.get("Content-Length")
-        if length:
-            try:
-                if int(length) > limit:
-                    raise ComfyUIError(
-                        f"{label}ä½“ç§¯è¶…è¿‡ä¸Šé™ï¼ˆæœ€å¤§ {limit // 1024 // 1024} MBï¼‰ã€‚"
-                    )
-            except ValueError:
-                pass
-        data = bytearray()
-        async for chunk in response.content.iter_chunked(64 * 1024):
-            data.extend(chunk)
-            if len(data) > limit:
-                raise ComfyUIError(
-                    f"{label}ä½“ç§¯è¶…è¿‡ä¸Šé™ï¼ˆæœ€å¤§ {limit // 1024 // 1024} MBï¼‰ã€‚"
-                )
-        return bytes(data)
-
-    @staticmethod
-    def _to_int(v, default):
-        if v is None:
-            return default
-        try:
-            return int(str(v).strip())
-        except Exception:
-            return default
-
-    @staticmethod
-    def _to_float(v, default):
-        if v is None:
-            return default
-        try:
-            return float(str(v).strip())
-        except Exception:
-            return default
-
-    @staticmethod
-    def _strip_command(message_str, names):
-        """ä»Žæ¶ˆæ¯æ–‡æœ¬é‡Œå‰¥æŽ‰è§¦å‘æŒ‡ä»¤ï¼ˆå«å¯èƒ½çš„å”¤é†’å‰ç¼€ï¼‰ï¼Œè¿”å›žå‚æ•°éƒ¨åˆ†ã€‚"""
-        s = (message_str or "").strip()
-        if not s:
-            return ""
-        names = {x.lower() for x in names}
-        parts = s.split(maxsplit=1)
-        first = parts[0].lstrip("/!#.ã€‚!\uFF03").lower()
-        if first in names:
-            return parts[1].strip() if len(parts) > 1 else ""
-        return s
-
-    @staticmethod
-    def _usage():
-        return (
-            "ðŸŽ¨ ComfyUI ç»˜å›¾\n"
-            "ç”¨æ³•ï¼š/ç»˜å›¾ <æç¤ºè¯> [å¯é€‰å‚æ•°]\n"
-            "å¯é€‰å‚æ•°ï¼š\n"
-            "  --neg <è´Ÿå‘è¯>     è´Ÿå‘æç¤ºè¯ï¼ˆå¯å¤šè¯ï¼‰\n"
-            "  --size å®½xé«˜       ä¾‹å¦‚ --size 768x512\n"
-            "  --æ¨ªå›¾/--ç«–å›¾      å¿«æ·å°ºå¯¸ï¼ˆå¦æœ‰ --æ–¹å›¾ / --å®½å›¾ / --å®½å±ï¼‰\n"
-            "  --steps N          é‡‡æ ·æ­¥æ•°\n"
-            "  --cfg N            CFG æ•°å€¼\n"
-            "  --seed N           å›ºå®šç§å­\n"
-            "  --batch N          ç”Ÿæˆå¼ æ•°\n"
-            "  -w <å·¥ä½œæµå>      é€‰æ‹©å·¥ä½œæµï¼ˆè§ /ç»˜å›¾åˆ—è¡¨ï¼‰\n"
-            "  --lora åç§°[:æƒé‡]  ä¸´æ—¶åŠ  LoRAï¼Œå¯å¤šæ¬¡ï¼Œå¦‚ --lora styleA:0.8\n"
-            "ç¤ºä¾‹ï¼š/ç»˜å›¾ a cute cat, masterpiece, best quality --size 768x512 --steps 25\n"
-            "å®Œæ•´å¸®åŠ©ï¼š/ç»˜å›¾å¸®åŠ©"
-        )
-
-    def _help_text(self):
-        names = "ã€".join(self._workflow_names())
-        mode = str(self.config.get("prompt_mode", "prepend") or "prepend").strip().lower()
-        if mode not in ("prepend", "append", "replace"):
-            mode = "prepend"
-        mode_desc = {
-            "prepend": "ä½ çš„è¯åœ¨å‰ã€å·¥ä½œæµåŽŸæœ‰æ–‡æœ¬åœ¨åŽï¼Œä¿ç•™è§¦å‘è¯",
-            "append": "å·¥ä½œæµåŽŸæœ‰æ–‡æœ¬åœ¨å‰ã€ä½ çš„è¯åœ¨åŽ",
-            "replace": "ç”¨ä½ çš„è¯è¦†ç›–å·¥ä½œæµåŽŸæœ‰æ–‡æœ¬",
-        }[mode]
-        return (
-            "ðŸŽ¨ ComfyUI ç»˜å›¾ Â· ä½¿ç”¨å¸®åŠ©\n"
-            "\n"
-            "ã€æŒ‡ä»¤ã€‘\n"
-            "/ç»˜å›¾ <æç¤ºè¯> [å‚æ•°]   å‡ºå›¾ï¼ˆåˆ«å draw / comfyui / comfyï¼‰\n"
-            "/äº‘ç»˜å›¾ <æç¤ºè¯> [å‚æ•°]  äº‘ç«¯å‡ºå›¾ï¼›æœ‰åŽŸå›¾æ—¶è‡ªåŠ¨å›¾ç‰‡ç¼–è¾‘ï¼ˆåˆ«å gptdrawï¼‰\n"
-            "/å˜æ‰‹åŠž                 å¼•ç”¨/é™„å¸¦åŽŸå›¾ï¼Œä¸€é”®è½¬æ¢æˆæ‰‹åŠžï¼ˆåˆ«å æ‰‹åŠžåŒ–ï¼‰\n"
-            "/äº‘ç»˜å›¾é¢„è®¾             æŸ¥çœ‹æ‰‹åŠžã€å¤´åƒã€æµ·æŠ¥ç­‰å¿«æ·é¢„è®¾\n"
-            "/äº‘ç»˜å›¾é¢åº¦             æŸ¥çœ‹ ChatGPT2API è´¦å·æ± é¢åº¦ï¼ˆé»˜è®¤ä»…ç®¡ç†å‘˜ï¼‰\n"
-            "/ç»˜å›¾åˆ—è¡¨              æŸ¥çœ‹å¯ç”¨å·¥ä½œæµï¼ˆåˆ«å drawlistï¼‰\n"
-            "/ç»˜å›¾çŠ¶æ€              æ£€æŸ¥ ComfyUI æ˜¯å¦åœ¨çº¿ï¼ˆåˆ«å drawstatusï¼‰\n"
-            "/ç»˜å›¾é»˜è®¤ [å·¥ä½œæµå]    æŸ¥çœ‹ / åˆ‡æ¢é»˜è®¤å·¥ä½œæµï¼ˆåˆ«å drawdefaultï¼‰\n"
-            "/äºŒæ¬¡å…ƒçš„æˆ‘          æŠ½å–ä»Šæ—¥çš„äºŒæ¬¡å…ƒå°‘å¥³å½¢è±¡ï¼Œæ¯äººæ¯å¤©ä¸€æ¬¡ï¼ˆåˆ«å æ¯æ—¥äºŒæ¬¡å…ƒï¼‰\n"
-            "/ç»˜å›¾å¸®åŠ©              æ˜¾ç¤ºæœ¬å¸®åŠ©ï¼ˆåˆ«å drawhelpï¼‰\n"
-            "\n"
-            "ã€å¯é€‰å‚æ•°ã€‘ï¼ˆéƒ½å¯çœç•¥ï¼‰\n"
-            "--neg <è´Ÿå‘è¯>   è´Ÿå‘æç¤ºè¯ï¼Œå¯å¤šè¯ï¼Œç›´åˆ°ä¸‹ä¸€ä¸ªå‚æ•°ä¸ºæ­¢\n"
-            "--size å®½xé«˜     ç”Ÿæˆå°ºå¯¸ï¼Œå¦‚ --size 768x1024\n"
-            "--æ¨ªå›¾ / --ç«–å›¾  å¿«æ·å°ºå¯¸ï¼›å¦æœ‰ --æ–¹å›¾ / --å®½å›¾ / --å®½å±\n"
-            "--steps N        é‡‡æ ·æ­¥æ•°\n"
-            "--cfg N          CFG æ•°å€¼\n"
-            "--seed N         å›ºå®šç§å­ï¼Œä¾¿äºŽå¤çŽ°ï¼›ä¸å†™åˆ™æ¯æ¬¡éšæœº\n"
-            "--batch N        ä¸€æ¬¡ç”Ÿæˆå¼ æ•°\n"
-            "-w <å·¥ä½œæµå>    é€‰æ‹©æŸå¥—å·¥ä½œæµï¼ˆè§ /ç»˜å›¾åˆ—è¡¨ï¼‰\n"
-            "--lora åç§°[:æƒé‡]  ä¸´æ—¶åŠ  LoRAï¼Œå¯å¤šæ¬¡ï¼Œå¦‚ --lora styleA:0.8\n"
-            "--quality å€¼     ç”Ÿæˆè´¨é‡ï¼ˆäº‘ç»˜å›¾ï¼Œå¦‚ standard / hdï¼‰\n"
-            "--style å€¼       ç”»é£Žï¼ˆäº‘ç»˜å›¾ï¼Œå¦‚ vivid / naturalï¼‰\n"
-            "--æ‰‹åŠž/--å¤´åƒç­‰  äº‘ç»˜å›¾æç¤ºè¯é¢„è®¾ï¼ˆå‘é€ /äº‘ç»˜å›¾é¢„è®¾ æŸ¥çœ‹å…¨éƒ¨ï¼‰\n"
-            "--è½¬å‘ / --fw    æœ¬æ¬¡ç»“æžœç”¨åˆå¹¶è½¬å‘å‘é€ï¼ˆä¹Ÿå¯åœ¨é…ç½®é‡Œå…¨å±€å¼€å¯ï¼‰\n"
-            "\n"
-            "ã€ç¤ºä¾‹ã€‘\n"
-            "/ç»˜å›¾ a cute cat, masterpiece\n"
-            "/ç»˜å›¾ ç”µå½±æ„Ÿå±±è°· --å®½å± -w é¬¼é’ˆè‰-æžé€Ÿ\n"
-            "/ç»˜å›¾ 1girl, garden --neg lowres, bad hands --size 768x1024 --steps 28\n"
-            "/ç»˜å›¾ é£Žæ™¯ --seed 12345 -w å°å¶å­\n"
-            "å¼•ç”¨ä¸€å¼ å›¾ç‰‡åŽå‘é€ /å˜æ‰‹åŠž\n"
-            "å¼•ç”¨ä¸€å¼ å›¾ç‰‡åŽå‘é€ /äº‘ç»˜å›¾ --æ¯›ç»’\n"
-            "\n"
-            "ã€è¯´æ˜Žã€‘\n"
-            "Â· ä»Žæ–‡ä»¶å¤¹åŠ è½½çš„å·¥ä½œæµï¼Œé»˜è®¤æ²¿ç”¨å…¶è‡ªå¸¦çš„å°ºå¯¸ / æ­¥æ•° / CFG / é‡‡æ ·å™¨ç­‰ï¼Œåªæœ‰æ˜¾å¼å†™äº†ä¸Šé¢çš„å‚æ•°æ‰è¦†ç›–ã€‚\n"
-            f"Â· æç¤ºè¯ä¸Žå·¥ä½œæµåŽŸæœ‰æ­£å‘æ–‡æœ¬çš„åˆå¹¶ï¼šå½“å‰ä¸º {mode}ï¼ˆ{mode_desc}ï¼‰ï¼Œå¯åœ¨é…ç½® prompt_mode è°ƒæ•´ã€‚\n"
-            "\n"
-            f"å½“å‰å¯ç”¨å·¥ä½œæµï¼š{names}"
-        )
-
-    # ------------------------------------------------------------------ #
-    # å‘é€ / ä¸´æ—¶æ–‡ä»¶
-    # ------------------------------------------------------------------ #
-    def _media_component(self, data: bytes, filename: str):
-        ext = (os.path.splitext(filename)[1] or ".png").lower().lstrip(".")
-        if ext in ("mp4", "webm", "mov"):
-            path = self._save_temp(data, ext)
-            return Comp.Video.fromFileSystem(path)
-        # å›¾ç‰‡ï¼šä¼˜å…ˆå°è¯•å†…å­˜å­—èŠ‚ï¼ˆè‹¥è¯¥ç‰ˆæœ¬æ”¯æŒï¼‰ï¼Œå¦åˆ™è½åœ°ä¸ºä¸´æ—¶æ–‡ä»¶
-        from_bytes = getattr(Comp.Image, "fromBytes", None)
-        if callable(from_bytes):
-            try:
-                return from_bytes(data)
-            except Exception:  # noqa: BLE001
-                pass
-        safe_ext = ext if ext in ("png", "jpg", "jpeg", "webp", "gif") else "png"
-        path = self._save_temp(data, safe_ext)
-        return Comp.Image.fromFileSystem(path)
-
-    def _temp_dir(self):
-        d = os.path.join("data", "temp")
-        try:
-            os.makedirs(d, exist_ok=True)
-            return d
-        except Exception:  # noqa: BLE001
-            d = os.path.join(tempfile.gettempdir(), "astrbot_comfyui")
-            os.makedirs(d, exist_ok=True)
-            return d
-
-    def _save_temp(self, data: bytes, ext="png"):
-        path = os.path.join(self._temp_dir(), f"comfyui_{uuid.uuid4().hex}.{ext}")
-        with open(path, "wb") as f:
-            f.write(data)
-        return path
-
-    def _sweep_temp(self, max_age=600):
-        # æ¸…ç† 10 åˆ†é’Ÿå‰ç”±æœ¬æ’ä»¶äº§ç”Ÿçš„ä¸´æ—¶æ–‡ä»¶ï¼Œé¿å…å †ç§¯ï¼›ä¸åŠ¨åˆšç”Ÿæˆçš„ï¼ˆé˜²æ­¢å’Œå¼‚æ­¥å‘é€ç«žäº‰ï¼‰
-        for base in (os.path.join("data", "temp"),
-                     os.path.join(tempfile.gettempdir(), "astrbot_comfyui")):
-            try:
-                if not os.path.isdir(base):
-                    continue
-                now = time.time()
-                for fn in os.listdir(base):
-                    if not fn.startswith("comfyui_"):
-                        continue
-                    p = os.path.join(base, fn)
-                    try:
-                        if now - os.path.getmtime(p) > max_age:
-                            os.remove(p)
-                    except Exception:  # noqa: BLE001
-                        pass
-            except Exception:  # noqa: BLE001
-                pass
-
-    # ------------------------------------------------------------------ #
-    # æ‚é¡¹
-    # ------------------------------------------------------------------ #
-    @staticmethod
-    def _split_url(raw):
-        """æŠŠç”¨æˆ·å¡«çš„åœ°å€è§„æ•´æˆ (http_base, ws_base)ã€‚æŽ¥å—å¸¦æˆ–ä¸å¸¦ schemeã€‚"""
-        raw = str(raw).strip()
-        if raw.startswith("http://"):
-            host, scheme = raw[len("http://"):], "http"
-        elif raw.startswith("https://"):
-            host, scheme = raw[len("https://"):], "https"
-        else:
-            host, scheme = raw, "http"
-        host = host.strip("/")
-        ws_scheme = "wss" if scheme == "https" else "ws"
-        return f"{scheme}://{host}", f"{ws_scheme}://{host}"
-
-    def _format_prompt_error(self, body):
-        if isinstance(body, dict):
-            err = body.get("error")
-            msg = ""
-            if isinstance(err, dict):
-                msg = err.get("message") or err.get("type") or ""
-            elif err:
-                msg = str(err)
-            extra = self._format_node_errors(body.get("node_errors"))
-            joined = (msg + ("\n" + extra if extra else "")).strip()
-            return joined or "æäº¤å·¥ä½œæµè¢« ComfyUI æ‹’ç»ã€‚"
-        return f"æäº¤å·¥ä½œæµå¤±è´¥ï¼š{body}"
-
-    @staticmethod
-    def _format_node_errors(node_errors):
-        if not isinstance(node_errors, dict) or not node_errors:
-            return ""
-        parts = []
-        for node_id, info in node_errors.items():
-            errs = info.get("errors", []) if isinstance(info, dict) else []
-            for e in errs:
-                if isinstance(e, dict):
-                    line = f"èŠ‚ç‚¹ {node_id}: {e.get('message', '')} {e.get('details', '')}".strip()
-                    parts.append(line)
-        return "\n".join(parts)
-
-    @staticmethod
-    def _format_exec_error(data):
-        node = data.get("node_type") or data.get("node_id") or "?"
-        msg = data.get("exception_message") or "æ‰§è¡Œé”™è¯¯"
-        return f"å·¥ä½œæµæ‰§è¡Œå‡ºé”™ï¼ˆèŠ‚ç‚¹ {node}ï¼‰ï¼š{msg}"
-
+        "--fw": "forward", "--forward": "fç}7ÞÚ$z{-®éÜj×"" ¢FVb'6Uö–çB†¶W’ÂÆ&VÂÂÖ–æ–×VÒÂÖ†–×VÒ“ ¢fÇVRÒ÷WBævWB†¶W’¢–bfÇVR—2æöæR÷"fÇVRÓÒ"# ¢&WGW&à¢G'“ ¢'6VBÒ–çB‡7G"‡fÇVR’ç7G&—‚’¢W†6WB…G—TW'&÷"ÂfÇVTW'&÷"“ ¢&—6R6öÖg•T”W'&÷"†b'¶Æ&VÇÒ[ø^š¾iŠþi[Ni[8""¢–bæ÷BÖ–æ–×VÒÃÒ'6VBÃÒÖ†–×VÓ ¢&—6R6öÖg•T”W'&÷"†b'¶Æ&VÇÒ[ø^š¾YÊ‚¶Ö–æ–×V×ÒX‹¶Ö†–×V×ÒK˜¾™{N8""¢÷WE¶¶W•ÒÒ'6V@ ¢'6Uö–çB€¢&&F6‚"À¢.yIþh‰[Êi["À¢À¢6VÆbåö6öæf–uö–çB‚&Ö…ö&F6…÷6—¦R"ÂBÂÂ’À¢¢–b6Æ÷VC ¢&WGW&â÷W@ ¢'6Uö–çB€¢'7FW2"À¢.˜x~j~jÚ^i["À¢À¢6VÆbåö6öæf–uö–çB‚&Ö…÷7FW2"ÂSÂÂ’À¢¢'6Uö–çB‚'6VVB"Â.zxÞZÙ"ÂÂ"¢¢c2Ò ¢6frÒ÷WBævWB‚&6fr"¢–b6fr—2æ÷BæöæRæB6frÒ"# ¢G'“ ¢6frÒfÆöB‡7G"†6fr’ç7G&—‚’¢W†6WB…G—TW'&÷"ÂfÇVTW'&÷"“ ¢&—6R6öÖg•T”W'&÷"‚$4dr[ø^š¾iŠþi[ZÙ~8""¢Ö…ö6frÒ6VÆbåö6öæf–uöfÆöB‚&Ö…ö6fr"ÂãÂãÂã¢–bæ÷BÖF‚æ—6f–æ—FR†6fr’÷"æ÷BÃÒ6frÃÒÖ…ö6fs ¢&—6R6öÖg•T”W'&÷"†b$4dr[ø^š¾iŠòX‹¶Ö…ö6fs¦wÒK˜¾™{Ny¨NiÈž™™i[ZÙ~8""¢÷WE²&6fr%ÒÒ6fp ¢6—¦RÒ÷WBævWB‚'6—¦R"¢–b6—¦S ¢æ÷&ÖÆ—¦VBÒ7G"‡6—¦R¢f÷"6W–â‚%‚"Â"¢"Â,9r"Â.)ÉR"Â.)Éb"“ ¢æ÷&ÖÆ—¦VBÒæ÷&ÖÆ—¦VBç&WÆ6R‡6WÂ'‚"¢'G2Òæ÷&ÖÆ—¦VBç7Æ—B‚'‚"¢–bÆVâ‡'G2’Ò# ¢&—6R6öÖg•T”W'&÷"‚.[®ZûŽjÎ[Èþ[©NK‹¢Zë×Žš¹ŽûÈÎKè¾Zh"sc‡ƒ#N8""¢G'“ ¢v–GF‚Â†V–v‡BÒ–çB‡'G5³Ò’Â–çB‡'G5³Ò¢W†6WBfÇVTW'&÷# ¢&—6R6öÖg•T”W'&÷"‚.[®ZûŽKŠÞy¨NZëÞY(Îš¹Ž[ø^š¾iŠþi[Ni[8""¢–bæ÷BƒcBÃÒv–GF‚ÃÒ#C‚æBcBÃÒ†V–v‡BÃÒ#C‚“ ¢&—6R6öÖg•T”W'&÷"‚.ZëÞY(Îš¹Ž˜;Þ[ø^š¾YÊ‚cBX‹#C‚K˜¾™{N8""¢÷WE²'6—¦R%ÒÒb'·6VÆbå÷&÷VæC‚‡v–GF‚—×‡·6VÆbå÷&÷VæC‚††V–v‡B—Ò ¢&WGW&â÷W@ ¢FVböVæf÷&6UöVffV7F—fUöÆ–Ö—G2‡6VÆbÂVffV7F—fR“ ¢"".j
+š¨ÎiÈ{¸Ž[z^KÙÎkXXø.i[ûÈÎ‹ùî[z^KÙÎkXˆz®[Šny¨Nš¹Žš8î™šžXÎK™þ{«>XZ^KùÞhªN8""" ¢Ö…÷7FW2Ò6VÆbåö6öæf–uö–çB‚&Ö…÷7FW2"ÂSÂÂ¢7FW2ÒVffV7F—fRævWB‚'7FW2"¢–b—6–ç7Fæ6R‡7FW2Â†–çBÂfÆöB’’æBæ÷B—6–ç7Fæ6R‡7FW2Â&ööÂ“ ¢–bæ÷BÖF‚æ—6f–æ—FR†fÆöB‡7FW2’’÷"7FW2Â÷"7FW2âÖ…÷7FW3 ¢&—6R6öÖg•T”W'&÷"†b.[z^KÙÎkXZéî™˜^˜x~j~jÚ^i[‹h^X{®XXŠëŽˆÈ>Y»B(	7¶Ö…÷7FW7Þ8"" ¢v–GF‚Â†V–v‡BÒVffV7F—fRævWB‚'v–GF‚"’ÂVffV7F—fRævWB‚&†V–v‡B"¢&F6‚ÒVffV7F—fRævWB‚&&F6…÷6—¦R"’÷"¢çVÖW&–2Ò‡v–GF‚Â†V–v‡BÂ&F6‚¢–bÆÂ†—6–ç7Fæ6R‡bÂ†–çBÂfÆöB’’æBæ÷B—6–ç7Fæ6R‡bÂ&ööÂ’f÷"b–âçVÖW&–2“ ¢F÷FÂÒ–çB‡v–GF‚’¢–çB††V–v‡B’¢–çB†&F6‚¢Ö…÷—†VÇ2Ò6VÆbåö6öæf–uö–çB€¢&Ö…÷F÷FÅ÷—†VÇ2"Âƒ3ƒƒc‚Â#c#CBÂ ¢¢–bF÷FÂâÖ…÷—†VÇ3 ¢&—6R6öÖg•T”W'&÷"€¢b.K»¾Xªh¾X8þ{J˜xò·F÷FÃ¢ÇÒ‹h^‹ø~Kˆ®™™¶Ö…÷—†VÇ3¢ÇÞûÉ² ¢.Šû~Xxþ[þ[®ZûŽh‰nyIþh‰[Êi[8" ¢ ¢FVbö6öæf–uö–çB‡6VÆbÂ¶W’ÂFVfVÇBÂÖ–æ–×VÓÔæöæRÂÖ†–×VÓÔæöæR“ ¢G'“ ¢fÇVRÒ–çB‡6VÆbæ6öæf–rævWB†¶W’ÂFVfVÇB’¢W†6WB…G—TW'&÷"ÂfÇVTW'&÷"“ ¢fÇVRÒ–çB†FVfVÇB¢–bÖ–æ–×VÒ—2æ÷BæöæS ¢fÇVRÒÖ‚†Ö–æ–×VÒÂfÇVR¢–bÖ†–×VÒ—2æ÷BæöæS ¢fÇVRÒÖ–â†Ö†–×VÒÂfÇVR¢&WGW&âfÇVP ¢FVbö6öæf–uöfÆöB‡6VÆbÂ¶W’ÂFVfVÇBÂÖ–æ–×VÓÔæöæRÂÖ†–×VÓÔæöæR“ ¢G'“ ¢fÇVRÒfÆöB‡6VÆbæ6öæf–rævWB†¶W’ÂFVfVÇB’¢W†6WB…G—TW'&÷"ÂfÇVTW'&÷"“ ¢fÇVRÒfÆöB†FVfVÇB¢–bæ÷BÖF‚æ—6f–æ—FR‡fÇVR“ ¢fÇVRÒfÆöB†FVfVÇB¢–bÖ–æ–×VÒ—2æ÷BæöæS ¢fÇVRÒÖ‚†Ö–æ–×VÒÂfÇVR¢–bÖ†–×VÒ—2æ÷BæöæS ¢fÇVRÒÖ–â†Ö†–×VÒÂfÇVR¢&WGW&âfÇVP ¢FVböÖ…ö'—FW2‡6VÆbÂ¶W’ÂFVfVÇEöÖ"“ ¢Ö"Ò6VÆbåö6öæf–uö–çB†¶W’ÂFVfVÇEöÖ"ÂÂ#C‚¢&WGW&âÖ"¢#B¢#@ ¢7FF–6ÖWF†ö@¢7–æ2FVb÷&VEöÆ–Ö—FVB‡&W7öç6RÂÆ–Ö—BÂÆ&VÂ“ ¢"".kX[ÈþŠû¾XùnY8Þ[©NûÈÎ˜þXXÞKˆKŠ®[È.[‹ŽY»îx˜rþŠxnš)ˆ	~[Þ‹ù¾zˆ¾Xh^ZÙŽ8""" ¢ÆVæwF‚Ò&W7öç6Ræ†VFW'2ævWB‚$6öçFVçBÔÆVæwF‚"¢–bÆVæwFƒ ¢G'“ ¢–b–çB†ÆVæwF‚’âÆ–Ö—C ¢&—6R6öÖg•T”W'&÷"€¢b'¶Æ&VÇÞKÙ>zzþ‹h^‹ø~Kˆ®™™ûÈŽiÈZJr¶Æ–Ö—Bòò#Bòò#GÒÔ.ûÈž8" ¢¢W†6WBfÇVTW'&÷# ¢70¢FFÒ'—FV'&’‚¢7–æ2f÷"6‡Væ²–â&W7öç6Ræ6öçFVçBæ—FW%ö6‡Væ¶VBƒcB¢#B“ ¢FFæW‡FVæB†6‡Væ²¢–bÆVâ†FF’âÆ–Ö—C ¢&—6R6öÖg•T”W'&÷"€¢b'¶Æ&VÇÞKÙ>zzþ‹h^‹ø~Kˆ®™™ûÈŽiÈZJr¶Æ–Ö—Bòò#Bòò#GÒÔ.ûÈž8" ¢¢&WGW&â'—FW2†FF ¢7FF–6ÖWF†ö@¢FVb÷Fõö–çB‡bÂFVfVÇB“ ¢–bb—2æöæS ¢&WGW&âFVfVÇ@¢G'“ ¢&WGW&â–çB‡7G"‡b’ç7G&—‚’¢W†6WBW†6WF–öã ¢&WGW&âFVfVÇ@ ¢7FF–6ÖWF†ö@¢FVb÷FõöfÆöB‡bÂFVfVÇB“ ¢–bb—2æöæS ¢&WGW&âFVfVÇ@¢G'“ ¢&WGW&âfÆöB‡7G"‡b’ç7G&—‚’¢W†6WBW†6WF–öã ¢&WGW&âFVfVÇ@ ¢7FF–6ÖWF†ö@¢FVb÷7G&—ö6öÖÖæB†ÖW76vU÷7G"ÂæÖW2“ ¢"".K¸îkhŽhþih~iÊÎ˜xÎXš^hèžŠznXùhÈ~KºNûÈŽY
+¾Xúþˆ;Þy¨NYJN˜i.X˜Þ{ÈûÈžûÈÎ‹ùNY¹îXø.i[˜:ŽXˆn8""" ¢2Ò†ÖW76vU÷7G"÷"""’ç7G&—‚¢–bæ÷B3 ¢&WGW&â" ¢æÖW2Ò·‚æÆ÷vW"‚’f÷"‚–âæÖW7Ð¢'G2Ò2ç7Æ—B†Ö‡7Æ—CÓ¢f—'7BÒ'G5³ÒæÇ7G&—‚"ò2î8"ÇTdc2"’æÆ÷vW"‚¢–bf—'7B–âæÖW3 ¢&WGW&â'G5³Òç7G&—‚’–bÆVâ‡'G2’âVÇ6R" ¢&WGW&â0 ¢7FF–6ÖWF†ö@¢FVb÷W6vR‚“ ¢&WGW&â€¢/	øê‚6öÖg•T’{¹ŽY»åÆâ ¢.yJŽk9^ûÉ¢þ{¹ŽY»âÎhùzK®ŠøÓâ¾Xúþ˜žXø.i[ÕÆâ ¢.Xúþ˜žXø.i[ûÉ¥Æâ ¢"ÒÖæVrÎ‹IþY	ŠøÓâ‹IþY	hùzK®ŠøÞûÈŽXúþZI®ŠøÞûÈ•Æâ ¢"Ò×6—¦RZë×Žš¹‚Kè¾Zh"Ò×6—¦Rsc‡ƒS%Æâ ¢"ÒÞjŠ®Y»âòÒÞz¹nY»â[ú¾hÛ~[®ZûŽûÈŽXúniÈ’ÒÞikžY»âòÒÞZëÞY»âòÒÞZëÞ[þûÈ•Æâ ¢"Ò×7FW2â˜x~j~jÚ^i[Æâ ¢"ÒÖ6frâ4dri[XÅÆâ ¢"Ò×6VVBâY»®Zé®zxÞZÙÆâ ¢"ÒÖ&F6‚âyIþh‰[Êi[Æâ ¢"×rÎ[z^KÙÎkXYÓâ˜žhºž[z^KÙÎkXûÈŽŠxþ{¹ŽY»îX‰~ŠŽûÈ•Æâ ¢"ÒÖÆ÷&YÞz{³®iØ>˜xÕÒK‹Ni{nXªÆõ$ûÈÎXúþZI®jÊûÈÎZh"ÒÖÆ÷&7G–ÆT£ã…Æâ ¢.zK®Kè¾ûÉ¢þ{¹ŽY»â7WFR6BÂÖ7FW'–V6RÂ&W7BVÆ—G’Ò×6—¦Rsc‡ƒS"Ò×7FW2#UÆâ ¢.ZèÎi[N[ŠîXªžûÉ¢þ{¹ŽY»î[ŠîXª’ ¢ ¢FVbö†VÇ÷FW‡B‡6VÆb“ ¢æÖW2Ò.8"æ¦ö–â‡6VÆbå÷v÷&¶fÆ÷uöæÖW2‚’¢ÖöFRÒ7G"‡6VÆbæ6öæf–rævWB‚'&ö×EöÖöFR"Â'&WVæB"’÷"'&WVæB"’ç7G&—‚’æÆ÷vW"‚¢–bÖöFRæ÷B–â‚'&WVæB"Â&VæB"Â'&WÆ6R"“ ¢ÖöFRÒ'&WVæB ¢ÖöFUöFW62Ò°¢'&WVæB#¢.KÚy¨NŠøÞYÊŽX˜Þ8[z^KÙÎkXXéþiÈžih~iÊÎYÊŽYîûÈÎKùÞyYžŠznXùŠøÒ"À¢&VæB#¢.[z^KÙÎkXXéþiÈžih~iÊÎYÊŽX˜Þ8KÚy¨NŠøÞYÊŽYâ"À¢'&WÆ6R#¢.yJŽKÚy¨NŠøÞŠhny¹n[z^KÙÎkXXéþiÈžih~iÊÂ"À¢Õ¶ÖöFUÐ¢&WGW&â€¢/	øê‚6öÖg•T’{¹ŽY»â+rKÛþyJŽ[ŠîXª•Æâ ¢%Æâ ¢.8	hÈ~KºN8	Æâ ¢"þ{¹ŽY»âÎhùzK®ŠøÓâ¾Xø.i[ÒX{®Y»îûÈŽXŠ¾YÒG&rò6öÖg—V’ò6öÖgžûÈ•Æâ ¢"þK©{¹ŽY»âÎhùzK®ŠøÓâ¾Xø.i[ÒK©zºþX{®Y»îûÉ¾iÈžXéþY»îi{nˆz®XªŽY»îx˜~{Én‹éûÈŽXŠ¾YÒwFG&~ûÈ•Æâ ¢"þXùŽh˜¾X©â[É^yJ‚þ™˜N[ŠnXéþY»îûÈÎKˆ™Jî‹ÚÎhÚ.h‰h˜¾X©îûÈŽXŠ¾YÒh˜¾X©îXÉnûÈ•Æâ ¢"þK©{¹ŽY»îš(NŠëâiú^yÈ¾h˜¾X©î8ZKNX8þ8k[~hª^zØž[ú¾hÛ~š(NŠëåÆâ ¢"þK©{¹ŽY»îš)Þ[ªbiú^yÈ²6†DuC$’‹JnXû~kš)Þ[ªnûÈŽ›¹ŽŠêNK¸^zêynYŽûÈ•Æâ ¢"þ{¹ŽY»îX‰~Š‚iú^yÈ¾XúþyJŽ[z^KÙÎkXûÈŽXŠ¾YÒG&vÆ—7NûÈ•Æâ ¢"þ{¹ŽY»îx«nhj8iúR6öÖg•T’iŠþY
+nYÊŽ{«þûÈŽXŠ¾YÒG&w7FGW>ûÈ•Æâ ¢"þ{¹ŽY»î›¹ŽŠêB¾[z^KÙÎkXYÕÒiú^yÈ²òXˆ~hÚ.›¹ŽŠêN[z^KÙÎkXûÈŽXŠ¾YÒG&vFVfVÇNûÈ•Æâ ¢"þK¨ÎjÊXX>y¨Nh‰h«ÞXùnK¸®iz^y¨NK¨ÎjÊXX>[	Z[>[Ú.‹ûÈÎjøþK«®jøþZJžKˆjÊûÈŽXŠ¾YÒjøþiz^K¨ÎjÊXX>ûÈ•Æâ ¢"þ{¹ŽY»î[ŠîXª’i‹îzK®iÊÎ[ŠîXªžûÈŽXŠ¾YÒG&v†VÇûÈ•Æâ ¢%Æâ ¢.8	Xúþ˜žXø.i[8	ûÈŽ˜;ÞXúþyÈyZ^ûÈ•Æâ ¢"ÒÖæVrÎ‹IþY	ŠøÓâ‹IþY	hùzK®ŠøÞûÈÎXúþZI®ŠøÞûÈÎy»NX‹Kˆ¾KˆKŠ®Xø.i[K‹®jÚ%Æâ ¢"Ò×6—¦RZë×Žš¹‚yIþh‰[®ZûŽûÈÎZh"Ò×6—¦Rsc‡ƒ#EÆâ ¢"ÒÞjŠ®Y»âòÒÞz¹nY»â[ú¾hÛ~[®ZûŽûÉ¾XúniÈ’ÒÞikžY»âòÒÞZëÞY»âòÒÞZëÞ[õÆâ ¢"Ò×7FW2â˜x~j~jÚ^i[Æâ ¢"ÒÖ6frâ4dri[XÅÆâ ¢"Ò×6VVBâY»®Zé®zxÞZÙûÈÎKëþK¨îZHÞxëûÉ¾KˆÞXižX‰žjøþjÊ™¨þiË¥Æâ ¢"ÒÖ&F6‚âKˆjÊyIþh‰[Êi[Æâ ¢"×rÎ[z^KÙÎkXYÓâ˜žhºžiùZY~[z^KÙÎkXûÈŽŠxþ{¹ŽY»îX‰~ŠŽûÈ•Æâ ¢"ÒÖÆ÷&YÞz{³®iØ>˜xÕÒK‹Ni{nXªÆõ$ûÈÎXúþZI®jÊûÈÎZh"ÒÖÆ÷&7G–ÆT£ã…Æâ ¢"Ò×VÆ—G’XÂyIþh‰‹JŽ˜xþûÈŽK©{¹ŽY»îûÈÎZh"7FæF&Bò†NûÈ•Æâ ¢"Ò×7G–ÆRXÂyK¾š8îûÈŽK©{¹ŽY»îûÈÎZh"f—f–BòæGW&ÎûÈ•Æâ ¢"ÒÞh˜¾X©âòÒÞZKNX8þzØ’K©{¹ŽY»îhùzK®ŠøÞš(NŠëîûÈŽXù˜þK©{¹ŽY»îš(NŠëâiú^yÈ¾XZŽ˜:ŽûÈ•Æâ ¢"ÒÞ‹ÚÎXùòÒÖgriÊÎjÊ{¹>iéÎyJŽYŽ[›n‹ÚÎXùXù˜ûÈŽK™þXúþYÊŽ˜XÞ{Úî˜xÎXZŽ[[ÈY
+þûÈ•Æâ ¢%Æâ ¢.8	zK®Kè¾8	Æâ ¢"þ{¹ŽY»â7WFR6BÂÖ7FW'–V6UÆâ ¢"þ{¹ŽY»âyK^[ÛhIþ[‹rÒÞZëÞ[ò×ršËÎ™(ŽˆØ’Þiè˜	õÆâ ¢"þ{¹ŽY»âv—&ÂÂv&FVâÒÖæVrÆ÷w&W2Â&B†æG2Ò×6—¦Rsc‡ƒ#BÒ×7FW2#…Æâ ¢"þ{¹ŽY»âš8îišòÒ×6VVB#3CR×r[þXûnZÙÆâ ¢.[É^yJŽKˆ[ÊY»îx˜~YîXù˜þXùŽh˜¾X©åÆâ ¢.[É^yJŽKˆ[ÊY»îx˜~YîXù˜þK©{¹ŽY»âÒÞjù¾{¹%Æâ ¢%Æâ ¢.8	ŠûNiˆî8	Æâ ¢,+rK¸îih~K»nZKžXª‹ÛÞy¨N[z^KÙÎkXûÈÎ›¹ŽŠêNk+þyJŽX[nˆz®[Šny¨N[®Zû‚òjÚ^i[ò4drò˜x~j~YšŽzØžûÈÎXú®iÈži‹î[ÈþXižK¨nKˆ®™Ú.y¨NXø.i[h˜ÞŠhny¹n8%Æâ ¢b,+rhùzK®ŠøÞKˆî[z^KÙÎkXXéþiÈžjÚ>Y	ih~iÊÎy¨NYŽ[›nûÉ®[Ù>X˜ÞK‹¢¶ÖöFWÞûÈ‡¶ÖöFUöFW67ÞûÈžûÈÎXúþYÊŽ˜XÞ{Úâ&ö×EöÖöFR‹>i[N8%Æâ ¢%Æâ ¢b.[Ù>X˜ÞXúþyJŽ[z^KÙÎkXûÉ§¶æÖW7Ò ¢ ¢2ÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒ0¢2Xù˜òK‹Ni{nih~K»`¢2ÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒ0¢FVböÖVF–ö6ö×öæVçB‡6VÆbÂFF¢'—FW2Âf–ÆVæÖS¢7G"“ ¢W‡BÒ†÷2çF‚ç7Æ—FW‡B†f–ÆVæÖR•³Ò÷""çær"’æÆ÷vW"‚’æÇ7G&—‚"â"¢–bW‡B–â‚&×B"Â'vV&Ò"Â&Ö÷b"“ ¢F‚Ò6VÆbå÷6fU÷FV×†FFÂW‡B¢&WGW&â6ö×åf–FVòæg&öÔf–ÆU7—7FVÒ‡F‚¢2Y»îx˜~ûÉ®KÉŽXXŽ[	ÞŠù^Xh^ZÙŽZÙ~ˆ¨.ûÈŽˆº^Šú^x˜ŽiÊÎiJþhÈûÈžûÈÎY
+nX‰ž‰ÞYËK‹®K‹Ni{nih~K»`¢g&öÕö'—FW2ÒvWFGG"„6ö×ä–ÖvRÂ&g&öÔ'—FW2"ÂæöæR¢–b6ÆÆ&ÆR†g&öÕö'—FW2“ ¢G'“ ¢&WGW&âg&öÕö'—FW2†FF¢W†6WBW†6WF–öã¢2æ÷¢$ÄS¢70¢6fUöW‡BÒW‡B–bW‡B–â‚'ær"Â&§r"Â&§Vr"Â'vV'"Â&v–b"’VÇ6R'ær ¢F‚Ò6VÆbå÷6fU÷FV×†FFÂ6fUöW‡B¢&WGW&â6ö×ä–ÖvRæg&öÔf–ÆU7—7FVÒ‡F‚ ¢FVb÷FV×öF—"‡6VÆb“ ¢BÒ÷2çF‚æ¦ö–â‚&FF"Â'FV×"¢G'“ ¢÷2æÖ¶VF—'2†BÂW†—7Eöö³ÕG'VR¢&WGW&â@¢W†6WBW†6WF–öã¢2æ÷¢$ÄS¢BÒ÷2çF‚æ¦ö–â‡FV×f–ÆRævWGFV×F—"‚’Â&7G&&÷Eö6öÖg—V’"¢÷2æÖ¶VF—'2†BÂW†—7Eöö³ÕG'VR¢&WGW&â@ ¢FVb÷6fU÷FV×‡6VÆbÂFF¢'—FW2ÂW‡CÒ'ær"“ ¢F‚Ò÷2çF‚æ¦ö–â‡6VÆbå÷FV×öF—"‚’Âb&6öÖg—V•÷·WV–BçWV–CB‚’æ†W‡Òç¶W‡GÒ"¢v—F‚÷Vâ‡F‚Â'v""’2c ¢bçw&—FR†FF¢&WGW&âF€ ¢FVb÷7vVW÷FV×‡6VÆbÂÖ…övSÓc“ ¢2kˆ^ybXˆn™)þX˜ÞyKiÊÎhù.K»nKª~yIþy¨NK‹Ni{nih~K»nûÈÎ˜þXXÞZnzzþûÉ¾KˆÞXªŽX‰®yIþh‰y¨NûÈŽ™‹.jÚ.Y(Î[È.jÚ^Xù˜z¹îK¨žûÈ¢f÷"&6R–â†÷2çF‚æ¦ö–â‚&FF"Â'FV×"’À¢÷2çF‚æ¦ö–â‡FV×f–ÆRævWGFV×F—"‚’Â&7G&&÷Eö6öÖg—V’"’“ ¢G'“ ¢–bæ÷B÷2çF‚æ—6F—"†&6R“ ¢6öçF–çVP¢æ÷rÒF–ÖRçF–ÖR‚¢f÷"fâ–â÷2æÆ—7FF—"†&6R“ ¢–bæ÷Bfâç7F'G7v—F‚‚&6öÖg—V•ò"“ ¢6öçF–çVP¢Ò÷2çF‚æ¦ö–â†&6RÂfâ¢G'“ ¢–bæ÷rÒ÷2çF‚ævWF×F–ÖR‡’âÖ…övS ¢÷2ç&VÖ÷fR‡¢W†6WBW†6WF–öã¢2æ÷¢$ÄS¢70¢W†6WBW†6WF–öã¢2æ÷¢$ÄS¢70 ¢2ÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒ0¢2iØ.š¢2ÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒÒ0¢7FF–6ÖWF†ö@¢FVb÷7Æ—E÷W&Â‡&r“ ¢"".h¨®yJŽh‹~Z¾y¨NYËYØŠxNi[Nh‰†‡GGö&6RÂw5ö&6Rž8.hê^Xù~[Šnh‰nKˆÞ[Šb66†VÖ^8""" ¢&rÒ7G"‡&r’ç7G&—‚¢–b&rç7F'G7v—F‚‚&‡GG¢òò"“ ¢†÷7BÂ66†VÖRÒ&u¶ÆVâ‚&‡GG¢òò"“¥ÒÂ&‡GG ¢VÆ–b&rç7F'G7v—F‚‚&‡GG3¢òò"“ ¢†÷7BÂ66†VÖRÒ&u¶ÆVâ‚&‡GG3¢òò"“¥ÒÂ&‡GG2 ¢VÇ6S ¢†÷7BÂ66†VÖRÒ&rÂ&‡GG ¢†÷7BÒ†÷7Bç7G&—‚"ò"¢w5÷66†VÖRÒ'w72"–b66†VÖRÓÒ&‡GG2"VÇ6R'w2 ¢&WGW&âb'·66†VÖWÓ¢ò÷¶†÷7GÒ"Âb'·w5÷66†VÖWÓ¢ò÷¶†÷7GÒ  ¢FVböf÷&ÖE÷&ö×EöW'&÷"‡6VÆbÂ&öG’“ ¢–b—6–ç7Fæ6R†&öG’ÂF–7B“ ¢W'"Ò&öG’ævWB‚&W'&÷""¢×6rÒ" ¢–b—6–ç7Fæ6R†W'"ÂF–7B“ ¢×6rÒW'"ævWB‚&ÖW76vR"’÷"W'"ævWB‚'G—R"’÷"" ¢VÆ–bW'# ¢×6rÒ7G"†W'"¢W‡G&Ò6VÆbåöf÷&ÖEöæöFUöW'&÷'2†&öG’ævWB‚&æöFUöW'&÷'2"’¢¦ö–æVBÒ†×6r²‚%Æâ"²W‡G&–bW‡G&VÇ6R""’’ç7G&—‚¢&WGW&â¦ö–æVB÷".hùKªN[z^KÙÎkXŠ*²6öÖg•T’h¹.{¹Þ8" ¢&WGW&âb.hùKªN[z^KÙÎkXZK‹J^ûÉ§¶&öG—Ò  ¢7FF–6ÖWF†ö@¢FVböf÷&ÖEöæöFUöW'&÷'2†æöFUöW'&÷'2“ ¢–bæ÷B—6–ç7Fæ6R†æöFUöW'&÷'2ÂF–7B’÷"æ÷BæöFUöW'&÷'3 ¢&WGW&â" ¢'G2ÒµÐ¢f÷"æöFUö–BÂ–æfò–âæöFUöW'&÷'2æ—FV×2‚“ ¢W''2Ò–æfòævWB‚&W'&÷'2"ÂµÒ’–b—6–ç7Fæ6R†–æfòÂF–7B’VÇ6RµÐ¢f÷"R–âW''3 ¢–b—6–ç7Fæ6R†RÂF–7B“ ¢Æ–æRÒb.ˆ¨.x+’¶æöFUö–GÓ¢¶RævWB‚vÖW76vRrÂrr—Ò¶RævWB‚vFWF–Ç2rÂrr—Ò"ç7G&—‚¢'G2æVæB†Æ–æR¢&WGW&â%Æâ"æ¦ö–â‡'G2 ¢7FF–6ÖWF†ö@¢FVböf÷&ÖEöW†V5öW'&÷"†FF“ ¢æöFRÒFFævWB‚&æöFU÷G—R"’÷"FFævWB‚&æöFUö–B"’÷"#ò ¢×6rÒFFævWB‚&W†6WF–öåöÖW76vR"’÷".hš~ŠÎ™IžŠúò ¢&WGW&âb.[z^KÙÎkXhš~ŠÎX{®™IžûÈŽˆ¨.x+’¶æöFWÞûÈžûÉ§¶×6wÒ 
