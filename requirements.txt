@@ -1,0 +1,3 @@
+# AstrBot 已自带 aiohttp，这里列出仅为保险起见
+aiohttp
+
