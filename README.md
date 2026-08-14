@@ -1,5 +1,9 @@
 # astrbot_plugin_comfyui_draw
 
+<p align="center">
+  <img src="logo.png" alt="ComfyUI 绘图插件图标" width="180">
+</p>
+
 让 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 通过 **ComfyUI 的工作流**进行 AI 绘图。
 
 你只需要把自己在 ComfyUI 里搭好的工作流导出成 **API 格式**，在要动态替换的地方留几个占位符，剩下的交给插件：用户发 `/绘图 ...`，插件把参数填进工作流、提交给 ComfyUI、等待出图、再把图片发回聊天里。
@@ -21,6 +25,7 @@ AstrBot/
             ├── metadata.yaml
             ├── _conf_schema.json
             ├── requirements.txt
+            ├── logo.png
             └── README.md
 ```
 
