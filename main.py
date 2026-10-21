@@ -971,14 +971,9 @@ class ComfyUIDrawPlugin(Star):
         progress_message_id = None
         if self.config.get("show_progress", True):
             progress_text = "🎨 正在生成（" + self._fmt_parts(effective) + "）..."
-            if self.config.get("auto_recall_progress", True):
-                progress_message_id, progress_sent = await self._send_progress_message(
-                    event, progress_text
-                )
-                if not progress_sent:
-                    yield event.plain_result(progress_text)
-            else:
-                yield event.plain_result(progress_text)
+            progress_message_id, fallback = await self._start_progress(event, progress_text)
+            if fallback is not None:
+                yield fallback
 
         results = []
         generation_error = None
@@ -999,6 +994,42 @@ class ComfyUIDrawPlugin(Star):
             yield event.plain_result(generation_error)
             return
 
+        chain = await self._build_result_chain(
+            event,
+            results,
+            effective,
+            card_label=display_wf,
+            info_suffix=f"工作流={display_wf}",
+            caption_prefix=caption_prefix,
+            daily_card=daily_card,
+            reply_to_source=reply_to_source,
+            on_success=on_success,
+        )
+        yield event.chain_result(self._maybe_forward(event, chain, opts))
+
+    async def _start_progress(self, event, text):
+        """发送进度提示，返回 (可撤回的消息 ID, 需要由调用方 yield 的普通消息或 None)。"""
+        if self.config.get("auto_recall_progress", True):
+            message_id, sent = await self._send_progress_message(event, text)
+            if sent:
+                return message_id, None
+        return None, event.plain_result(text)
+
+    async def _build_result_chain(
+        self,
+        event,
+        results,
+        effective,
+        *,
+        card_label,
+        info_suffix,
+        caption_prefix="",
+        daily_card=False,
+        reply_to_source=False,
+        on_success=None,
+        show_info=True,
+    ):
+        """本地与云端共用：组装引用、资料卡/说明文字、生成结果和参数回显。"""
         chain = []
         if reply_to_source:
             reply = self._source_reply_component(event)
@@ -1008,11 +1039,7 @@ class ComfyUIDrawPlugin(Star):
         card_rendered = False
         if daily_card and caption_prefix and results:
             card_path = await self._render_daily_me_card(
-                caption_prefix,
-                effective,
-                display_wf,
-                results[0][0],
-                results[0][1],
+                caption_prefix, effective, card_label, results[0][0], results[0][1]
             )
             if card_path:
                 chain.append(self._rendered_image_component(card_path))
@@ -1025,11 +1052,11 @@ class ComfyUIDrawPlugin(Star):
                 on_success()
             except Exception:  # noqa: BLE001
                 pass
-        if self.config.get("send_seed_info", True) and not card_rendered:
-            info = "✅ " + self._fmt_parts(effective) + f" · 工作流={display_wf}"
+        if show_info and self.config.get("send_seed_info", True) and not card_rendered:
+            info = "✅ " + self._fmt_parts(effective) + f" · {info_suffix}"
             # 前置零宽空格，避免 OneBot 适配器 strip 掉内容
             chain.append(Comp.Plain("\u200b" + info))
-        yield event.chain_result(self._maybe_forward(event, chain, opts))
+        return chain
 
     @staticmethod
     def _source_reply_component(event):
@@ -1359,6 +1386,7 @@ class ComfyUIDrawPlugin(Star):
             fil = str(getattr(comp, "file", "") or "")
             data = None
             try:
+                local_path = self._local_image_path(comp)
                 if fil.startswith("base64://"):
                     encoded = fil[len("base64://"):]
                     if len(encoded) > (max_bytes * 4 // 3) + 16:
@@ -1368,10 +1396,10 @@ class ComfyUIDrawPlugin(Star):
                     data = await self._fetch_url_bytes(url)
                 elif fil.startswith("http"):
                     data = await self._fetch_url_bytes(fil)
-                elif fil and os.path.exists(fil):
-                    if os.path.getsize(fil) > max_bytes:
+                elif local_path:
+                    if os.path.getsize(local_path) > max_bytes:
                         raise ComfyUIError("输入图片超过体积上限。")
-                    with open(fil, "rb") as f:
+                    with open(local_path, "rb") as f:
                         data = f.read()
                 if data and len(data) > max_bytes:
                     raise ComfyUIError("输入图片超过体积上限。")
@@ -1384,6 +1412,24 @@ class ComfyUIDrawPlugin(Star):
             if len(out) >= limit:
                 break
         return out
+
+    @staticmethod
+    def _local_image_path(comp):
+        """返回图片组件指向的本地文件；兼容 AstrBot fromFileSystem 生成的 file:/// 地址。"""
+        for value in (getattr(comp, "path", None), getattr(comp, "file", None)):
+            candidate = str(value or "").strip()
+            if not candidate or candidate.startswith(("http://", "https://", "base64://")):
+                continue
+            if candidate.startswith("file:///"):
+                candidate = candidate[len("file:///"):]
+                # POSIX 上 file:/// 后面紧跟的是相对写法，需要补回根目录。
+                if os.name != "nt" and not candidate.startswith("/"):
+                    candidate = "/" + candidate
+            elif candidate.startswith("file://"):
+                candidate = candidate[len("file://"):]
+            if os.path.isfile(candidate):
+                return candidate
+        return None
 
     def _iter_message_components(self, components):
         """按消息顺序展开组件，同时递归读取 Reply 等组件内保存的引用消息链。"""
@@ -1592,15 +1638,6 @@ class ComfyUIDrawPlugin(Star):
         today = time.strftime("%Y-%m-%d")
         if self._daily_me.get("date") != today:
             self._daily_me = {"date": today, "used": {}}
-
-    def _daily_me_used(self, uid):
-        self._daily_me_roll_date()
-        return str(uid) in self._daily_me["used"]
-
-    def _daily_me_mark(self, uid):
-        self._daily_me_roll_date()
-        self._daily_me["used"][str(uid)] = 1
-        self._daily_me_save()
 
     async def _daily_me_reserve(self, uid):
         """原子检查每日限次并预占；并发请求只能有一个成功。"""
@@ -2325,14 +2362,9 @@ class ComfyUIDrawPlugin(Star):
             action = "编辑原图" if source_images else "生成"
             backend_label = "Antigravity/Gemini" if is_antigravity else "GPT-Image"
             progress_text = f"🎨 正在用云端 {backend_label} {action}（" + " · ".join(parts) + "）..."
-            if self.config.get("auto_recall_progress", True):
-                progress_message_id, progress_sent = await self._send_progress_message(
-                    event, progress_text
-                )
-                if not progress_sent:
-                    yield event.plain_result(progress_text)
-            else:
-                yield event.plain_result(progress_text)
+            progress_message_id, fallback = await self._start_progress(event, progress_text)
+            if fallback is not None:
+                yield fallback
 
         results = []
         generation_error = None
@@ -2374,36 +2406,20 @@ class ComfyUIDrawPlugin(Star):
                 effective["width"] = int(width)
                 effective["height"] = int(height)
 
-        chain = []
-        if reply_to_source:
-            reply = self._source_reply_component(event)
-            if reply is not None:
-                chain.append(reply)
-
-        card_rendered = False
         model = self._cloud_image_model()
-        if daily_card and caption_prefix and results:
-            card_path = await self._render_daily_me_card(
-                caption_prefix,
-                effective,
-                f"云端·{model}",
-                results[0][0],
-                results[0][1],
-            )
-            if card_path:
-                chain.append(self._rendered_image_component(card_path))
-                card_rendered = True
-        if caption_prefix and not card_rendered:
-            chain.append(Comp.Plain(str(caption_prefix).strip()))
-        chain.extend(self._media_component(data, filename) for data, filename in results)
-        if on_success:
-            try:
-                on_success()
-            except Exception:  # noqa: BLE001
-                pass
-        if caption_prefix and self.config.get("send_seed_info", True) and not card_rendered:
-            info = "✅ " + self._fmt_parts(effective) + f" · 云端模型={model}"
-            chain.append(Comp.Plain("\u200b" + info))
+        chain = await self._build_result_chain(
+            event,
+            results,
+            effective,
+            card_label=f"云端·{model}",
+            info_suffix=f"云端模型={model}",
+            caption_prefix=caption_prefix,
+            daily_card=daily_card,
+            reply_to_source=reply_to_source,
+            on_success=on_success,
+            # 普通云绘图不回显参数，只有带说明文字（如「二次元的我」）时才附上。
+            show_info=bool(caption_prefix),
+        )
         yield event.chain_result(self._maybe_forward(event, chain, opts))
 
     def _apply_cloud_prompt_preset(self, prompt: str, requested: str = None):
@@ -2811,75 +2827,16 @@ class ComfyUIDrawPlugin(Star):
         )
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = None
-            status = 0
-            url = urls[0]
-            for attempt, url in enumerate(urls):
-                try:
-                    async with session.post(url, json=body, headers=headers) as resp:
-                        response_limit = (
-                            self._max_bytes("max_output_size_mb", 100)
-                            * max(1, int(n))
-                            * 2
-                            + 1024 * 1024
-                        )
-                        raw_response = await self._read_limited(
-                            resp, response_limit, "云端绘图响应"
-                        )
-                        try:
-                            data = json.loads(raw_response.decode("utf-8"))
-                        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                            raise ComfyUIError(
-                                f"云端绘图接口返回的不是有效 JSON：{e}"
-                            )
-                        status = resp.status
-                except asyncio.TimeoutError:
-                    raise
-                except ComfyUIError:
-                    raise
-                except Exception as e:  # noqa: BLE001
-                    raise ComfyUIError(f"无法连接云端绘图接口（{url}）：{e}")
-
-                # “自动”模式允许填写项目根地址；若根路径没有图片接口，
-                # 再尝试 OpenAI 规范的 /v1/images/generations。
-                if status in {404, 405} and attempt + 1 < len(urls):
-                    continue
-                break
-
-            if status != 200:
-                raise ComfyUIError(self._format_openai_error(data, status))
-
-            items = (data or {}).get("data") or []
-            if not items:
-                raise ComfyUIError("云端绘图没有返回图片数据。")
-
-            results = []
-            for i, it in enumerate(items):
-                if not isinstance(it, dict):
-                    continue
-                b64 = it.get("b64_json")
-                if b64:
-                    try:
-                        b64 = str(b64).strip()
-                        if b64.startswith("data:") and ";base64," in b64:
-                            b64 = b64.split(";base64,", 1)[1]
-                        max_bytes = self._max_bytes("max_output_size_mb", 100)
-                        if len(b64) > (max_bytes * 4 // 3) + 16:
-                            raise ComfyUIError("云端返回的图片超过体积上限。")
-                        raw = base64.b64decode(b64)
-                    except Exception as e:  # noqa: BLE001
-                        if isinstance(e, ComfyUIError):
-                            raise
-                        raise ComfyUIError(f"图片解码失败：{e}")
-                    if len(raw) > max_bytes:
-                        raise ComfyUIError("云端返回的图片超过体积上限。")
-                    results.append((raw, f"gptimage_{i}.png"))
-                elif it.get("url"):
-                    raw = await self._download_bytes(session, it["url"])
-                    results.append((raw, f"gptimage_{i}.png"))
-            if not results:
-                raise ComfyUIError("云端绘图返回了空的图片数据。")
-            return results
+            data = await self._post_cloud_json(
+                session,
+                urls,
+                lambda: {"json": body, "headers": headers},
+                self._cloud_response_limit(n),
+                "云端绘图",
+            )
+            return await self._decode_openai_image_results(
+                session, data, prefix="gptimage", label="云端绘图"
+            )
 
     async def _run_openai_image_edit(
         self,
@@ -2944,52 +2901,61 @@ class ComfyUIDrawPlugin(Star):
             return form
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = None
-            status = 0
-            url = urls[0]
-            for attempt, url in enumerate(urls):
-                try:
-                    async with session.post(
-                        url, data=build_form(), headers=headers
-                    ) as resp:
-                        response_limit = (
-                            self._max_bytes("max_output_size_mb", 100)
-                            * count
-                            * 2
-                            + 1024 * 1024
-                        )
-                        raw_response = await self._read_limited(
-                            resp, response_limit, "云端图片编辑响应"
-                        )
-                        try:
-                            data = json.loads(raw_response.decode("utf-8"))
-                        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                            raise ComfyUIError(
-                                f"云端图片编辑接口返回的不是有效 JSON：{e}"
-                            )
-                        status = resp.status
-                except asyncio.TimeoutError:
-                    raise
-                except ComfyUIError:
-                    raise
-                except Exception as e:  # noqa: BLE001
+            data = await self._post_cloud_json(
+                session,
+                urls,
+                lambda: {"data": build_form(), "headers": headers},
+                self._cloud_response_limit(count),
+                "云端图片编辑",
+            )
+            return await self._decode_openai_image_results(
+                session, data, prefix="gptedit", label="云端图片编辑"
+            )
+
+    def _cloud_response_limit(self, count):
+        """一次响应可能包含 count 张 Base64 图片，按单图上限的两倍预留并加 1 MB 余量。"""
+        return (
+            self._max_bytes("max_output_size_mb", 100) * max(1, int(count)) * 2
+            + 1024 * 1024
+        )
+
+    async def _post_cloud_json(self, session, urls, request_kwargs, response_limit, label):
+        """依次请求候选地址并返回 JSON；仅在 404/405 且还有候选地址时换下一个。
+
+        request_kwargs 是无参函数，每次请求都重新生成参数（FormData 只能被消费一次）。
+        """
+        status, data = 0, None
+        for attempt, url in enumerate(urls):
+            try:
+                async with session.post(url, **request_kwargs()) as resp:
+                    status = resp.status
+                    # 先判断是否回退：根地址的 404 常是 HTML 页面，不能先当 JSON 解析，
+                    # 否则“自动”模式永远走不到 /v1 路径。
+                    if status in {404, 405} and attempt + 1 < len(urls):
+                        continue
+                    raw = await self._read_limited(resp, response_limit, f"{label}响应")
+            except (asyncio.TimeoutError, ComfyUIError):
+                raise
+            except Exception as e:  # noqa: BLE001
+                raise ComfyUIError(f"无法连接{label}接口（{url}）：{e}")
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                if status != 200:
                     raise ComfyUIError(
-                        f"无法连接云端图片编辑接口（{url}）：{e}"
+                        f"{label}失败（HTTP {status}）：接口返回的不是 JSON，请检查地址是否正确。"
                     )
+                raise ComfyUIError(f"{label}接口返回的不是有效 JSON：{e}")
+            break
+        if status != 200:
+            raise ComfyUIError(self._format_openai_error(data, status))
+        return data
 
-                if status in {404, 405} and attempt + 1 < len(urls):
-                    continue
-                break
-
-            if status != 200:
-                raise ComfyUIError(self._format_openai_error(data, status))
-            return await self._decode_openai_image_results(session, data)
-
-    async def _decode_openai_image_results(self, session, data):
+    async def _decode_openai_image_results(self, session, data, prefix="gptedit", label="云端图片编辑"):
         """解析图片接口共同的 b64_json / url 返回格式。"""
-        items = (data or {}).get("data") or []
-        if not items:
-            raise ComfyUIError("云端图片编辑没有返回图片数据。")
+        items = data.get("data") if isinstance(data, dict) else None
+        if not items or not isinstance(items, list):
+            raise ComfyUIError(f"{label}没有返回图片数据。")
         results = []
         max_bytes = self._max_bytes("max_output_size_mb", 100)
         for index, item in enumerate(items):
@@ -3010,12 +2976,15 @@ class ComfyUIDrawPlugin(Star):
                     raise ComfyUIError(f"图片解码失败：{e}")
                 if len(raw) > max_bytes:
                     raise ComfyUIError("云端返回的图片超过体积上限。")
-                results.append((raw, f"gptedit_{index}.png"))
             elif item.get("url"):
                 raw = await self._download_bytes(session, item["url"])
-                results.append((raw, f"gptedit_{index}.png"))
+            else:
+                continue
+            # 按文件头确定扩展名，JPEG/WebP 结果不再一律标成 .png。
+            ext = self._image_upload_meta(raw)[0].rsplit(".", 1)[-1]
+            results.append((raw, f"{prefix}_{index}.{ext}"))
         if not results:
-            raise ComfyUIError("云端图片编辑返回了空的图片数据。")
+            raise ComfyUIError(f"{label}返回了空的图片数据。")
         return results
 
     async def _download_bytes(self, session, url):
@@ -3098,7 +3067,14 @@ class ComfyUIDrawPlugin(Star):
                         f"{http_base}/prompt",
                         json={"prompt": workflow, "client_id": client_id},
                     ) as resp:
-                        body = await resp.json(content_type=None)
+                        try:
+                            body = await resp.json(content_type=None)
+                        except ValueError:
+                            # 反向代理或 ComfyUI 崩溃时可能返回 HTML/空响应。
+                            raise ComfyUIError(
+                                f"ComfyUI 返回了无法解析的响应（HTTP {resp.status}），"
+                                "请检查地址或查看 ComfyUI 控制台日志。"
+                            )
                         if resp.status != 200:
                             raise ComfyUIError(self._format_prompt_error(body))
                         prompt_id = body.get("prompt_id")
@@ -3290,10 +3266,6 @@ class ComfyUIDrawPlugin(Star):
         return self._resolve_named(name)
 
     @staticmethod
-    def _contains_placeholder(text):
-        return bool(ComfyUIDrawPlugin._placeholder_names(text))
-
-    @staticmethod
     def _placeholder_names(text):
         if not isinstance(text, str):
             return set()
@@ -3382,17 +3354,6 @@ class ComfyUIDrawPlugin(Star):
                     result = result.replace(ph, str(val))
             return result
         return obj
-
-    def _set_all_seeds(self, workflow: dict, seed_value: int):
-        for node in workflow.values():
-            if not isinstance(node, dict):
-                continue
-            inputs = node.get("inputs")
-            if not isinstance(inputs, dict):
-                continue
-            for k, v in list(inputs.items()):
-                if k in ("seed", "noise_seed") and isinstance(v, int) and not isinstance(v, bool):
-                    inputs[k] = seed_value
 
     # ------------------------------------------------------------------ #
     # 原始工作流（无占位符）的智能参数注入
@@ -3833,16 +3794,11 @@ class ComfyUIDrawPlugin(Star):
         return " ".join(positive).strip(), opts
 
     def _resolve_size(self, size_str):
+        parsed = self._parse_size_strict(size_str)
+        if parsed is not None:
+            return parsed
         dw = self._config_int("default_width", 512, 64, 2048)
         dh = self._config_int("default_height", 512, 64, 2048)
-        if size_str:
-            for sep in ("x", "X", "*", "×", "✕", "✖"):
-                if sep in size_str:
-                    a, _, b = size_str.partition(sep)
-                    try:
-                        return self._clamp_dim(int(a)), self._clamp_dim(int(b))
-                    except Exception:
-                        break
         return self._round8(dw), self._round8(dh)
 
     def _clamp_dim(self, v):
