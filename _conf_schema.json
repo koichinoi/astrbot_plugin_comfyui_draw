@@ -218,6 +218,16 @@
     "description": "出图后附带种子等参数信息",
     "default": true
   },
+  "help_card_theme": {
+    "type": "string",
+    "description": "/绘图帮助 卡片主题",
+    "hint": "默认为淡紫蓝画室风格；神社为朱红和纸、鸟居与注连绳的和风风格。管理员也可以发送 /绘图主题 <主题名> 在线切换。",
+    "default": "默认",
+    "options": [
+      "默认",
+      "神社"
+    ]
+  },
   "active_cloud_profile": {
     "type": "string",
     "description": "当前使用的云绘图方案",
