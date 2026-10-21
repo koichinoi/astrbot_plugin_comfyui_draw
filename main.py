@@ -30,6 +30,11 @@ class ComfyUIError(Exception):
     pass
 
 
+class GeminiTextOnlyError(ComfyUIError):
+    """Gemini 正常结束但只回复了文字、没有图片（常见于提示词过短被当成聊天）。"""
+    pass
+
+
 class ComfyUIDrawPlugin(Star):
     # 预设数据见 presets.py，这里保留同名类属性以兼容原有调用。
     FLAG_ALIASES = presets.FLAG_ALIASES
@@ -1978,6 +1983,27 @@ class ComfyUIDrawPlugin(Star):
             raise ComfyUIError("Gemini 比例兼容模式只能是 auto、strict 或 prompt。")
         return mode
 
+    GEMINI_IMAGE_OUTPUT_HINT = (
+        "Output requirement: generate the image described above and return it as an image. "
+        "Do not answer with only text, a description, or a placeholder."
+    )
+    GEMINI_EDIT_OUTPUT_HINT = (
+        "Output requirement: apply the request above to the provided image(s) and return the "
+        "resulting image. Do not answer with only text or a description."
+    )
+
+    @staticmethod
+    def _gemini_require_image(body):
+        """在不改动原请求的前提下追加更强的出图要求，供“只回文字”时重试一次。"""
+        contents = list(body["contents"])
+        content = dict(contents[0])
+        content["parts"] = [*content["parts"], {
+            "text": "IMPORTANT: the previous reply contained only text. This is an image generation "
+                    "request. Output the image itself now; at most one short caption is allowed."
+        }]
+        contents[0] = content
+        return {**body, "contents": contents}
+
     @staticmethod
     def _gemini_without_aspect_ratio(body):
         """只去掉被拒绝的比例字段，原图、提示词、清晰度均保留。"""
@@ -2004,7 +2030,7 @@ class ComfyUIDrawPlugin(Star):
             data = data["response"]
         if data.get("error"):
             raise ComfyUIError(self._format_openai_error(data, 200))
-        results, details = [], []
+        results, details, texts, finish_reasons = [], [], [], []
         candidates = data.get("candidates") or []
         if not isinstance(candidates, list):
             raise ComfyUIError("Antigravity 返回的 candidates 格式不正确。")
@@ -2015,6 +2041,7 @@ class ComfyUIDrawPlugin(Star):
                 continue
             if candidate.get("finishReason"):
                 details.append(str(candidate["finishReason"]))
+                finish_reasons.append(str(candidate["finishReason"]).upper())
             content = candidate.get("content") or {}
             parts = content.get("parts", []) if isinstance(content, dict) else []
             if not isinstance(parts, list):
@@ -2024,6 +2051,7 @@ class ComfyUIDrawPlugin(Star):
                     continue
                 if part.get("text"):
                     details.append(str(part["text"])[:300])
+                    texts.append(str(part["text"]))
                 inline = part.get("inlineData") or part.get("inline_data")
                 if not isinstance(inline, dict):
                     continue
@@ -2044,8 +2072,18 @@ class ComfyUIDrawPlugin(Star):
                 results.append((raw, f"gemini_{len(results)}.{extensions[mime]}"))
         if not results:
             feedback = data.get("promptFeedback") or {}
-            if isinstance(feedback, dict) and feedback.get("blockReason"):
+            blocked = isinstance(feedback, dict) and feedback.get("blockReason")
+            if blocked:
                 details.insert(0, str(feedback["blockReason"]))
+            if texts and not blocked and all(r in {"STOP", "FINISH_REASON_UNSPECIFIED"} for r in finish_reasons):
+                # 正常结束却只有文字：模型把请求当成了聊天，可再明确要求一次出图。
+                excerpt = " ".join(" ".join(texts).split())
+                if len(excerpt) > 60:
+                    excerpt = excerpt[:60] + "…"
+                raise GeminiTextOnlyError(
+                    f"Antigravity 只回复了文字，没有生成图片（模型回复：{excerpt}）。"
+                    "可以把画面写得更具体，比如人物外貌、动作、场景和画风，再试一次。"
+                )
             reason = "；".join(details)[:400] or "请检查绘图模型名、分组绘图权限和上游图片额度。"
             raise ComfyUIError(
                 f"Antigravity 没有返回最终图片：{reason} "
@@ -2077,6 +2115,8 @@ class ComfyUIDrawPlugin(Star):
         if style:
             text += f"\nVisual style: {str(style).strip()}"
         parts.append({"text": text})
+        # 单独追加输出要求，避免短提示词（如只有角色名）被模型当成聊天而只回文字。
+        parts.append({"text": self.GEMINI_EDIT_OUTPUT_HINT if source_images else self.GEMINI_IMAGE_OUTPUT_HINT})
         body = {
             "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": image_config},
@@ -2089,14 +2129,17 @@ class ComfyUIDrawPlugin(Star):
         count = self._clamp_batch(int(n))
         seconds = self._config_int("openai_image_timeout", 180, 1, 3600)
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        text_only_retry = bool(self.config.get("gemini_text_only_retry", True))
         results = []
 
         async def generate():
             nonlocal body
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=seconds)) as session:
                 for index in range(count):
+                    request = body
+                    retry_left = text_only_retry
                     while True:
-                        async with session.post(url, json=body, headers=headers, allow_redirects=False) as resp:
+                        async with session.post(url, json=request, headers=headers, allow_redirects=False) as resp:
                             raw = await self._read_limited(
                                 resp, self._max_bytes("max_output_size_mb", 100) * 2 + 1024 * 1024,
                                 "Antigravity 绘图响应",
@@ -2115,6 +2158,7 @@ class ComfyUIDrawPlugin(Star):
                                         and "aspectRatio" in body["generationConfig"]["imageConfig"]):
                                     # 只针对已明确拒绝的字段回退一次；不重试超时、限流或生成失败。
                                     body = self._gemini_without_aspect_ratio(body)
+                                    request = body
                                     disabled_urls.add(url)
                                     logger.warning("[comfyui_draw] 模型拒绝 aspectRatio，已省略该字段并将比例转为构图提示；本次加载期间记住此模型限制。")
                                     continue
@@ -2123,7 +2167,17 @@ class ComfyUIDrawPlugin(Star):
                                 if resp.status == 403:
                                     message += "；请检查 Key 所属分组的绘图权限、模型白名单和额度。"
                                 raise ComfyUIError(message)
-                            images = self._decode_gemini_image_results(payload)
+                            try:
+                                images = self._decode_gemini_image_results(payload)
+                            except GeminiTextOnlyError as e:
+                                if not retry_left:
+                                    suffix = "（已自动要求重新出图一次，仍只有文字。）" if text_only_retry else ""
+                                    raise ComfyUIError(str(e) + suffix) from None
+                                # 只对“正常结束但没出图”重试一次；拦截、超时、限流等仍不重试。
+                                retry_left = False
+                                request = self._gemini_require_image(body)
+                                logger.warning("[comfyui_draw] Gemini 只回复了文字，已明确要求输出图片并重试一次。")
+                                continue
                             image, filename = images[0]
                             results.append((image, f"gemini_{index}.{filename.rsplit('.', 1)[-1]}"))
                             break
