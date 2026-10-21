@@ -799,9 +799,7 @@ class ComfyUIDrawPlugin(Star):
             # Gemini 只接受比例与分辨率档位，先保留原比例供请求构建时映射。
             return f"{width}x{height}"
 
-        model = str(
-            self.config.get("openai_image_model", "") or "gpt-image-2"
-        ).strip().lower()
+        model = self._cloud_image_model().lower()
         if "gpt-image-2" not in model:
             # 较旧模型通常只接受三个固定档位，选择最接近原图比例的一档。
             ratio = width / height
@@ -1171,6 +1169,7 @@ class ComfyUIDrawPlugin(Star):
                     {"cmd": "/绘图列表", "desc": "查看可用工作流", "admin": False},
                     {"cmd": "/绘图状态", "desc": "检查 ComfyUI 是否在线", "admin": False},
                     {"cmd": "/云绘图预设", "desc": "查看手办、头像、海报等云绘图快捷预设", "admin": False},
+                    {"cmd": "/云绘图切换 [方案] [模型]", "desc": "查看云绘图方案；切换方案或模型仅限管理员", "admin": True},
                     {"cmd": "/云绘图额度", "desc": "查看 ChatGPT2API 账号池剩余额度与状态", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
@@ -1415,6 +1414,134 @@ class ComfyUIDrawPlugin(Star):
         lines.append("说明：这是 ChatGPT2API 账号池额度，不是官方 API 账单余额。")
         yield event.plain_result("\n".join(lines))
 
+    CLOUD_PROVIDER_LABELS = {
+        "auto": "OpenAI 兼容（自动）",
+        "chatgpt2api": "ChatGPT2API",
+        "openai-compatible": "OpenAI 兼容",
+        "sub2api-antigravity": "Antigravity/Gemini",
+    }
+
+    def _cloud_profile_names(self):
+        return [self.DEFAULT_CLOUD_PROFILE, *self._cloud_profiles().keys()]
+
+    def _match_cloud_profile(self, text):
+        """按名称匹配方案（先精确、再忽略大小写）；default / reset 视为「默认」。"""
+        value = str(text or "").strip()
+        if value.lower() in {"default", "reset", "重置"}:
+            return self.DEFAULT_CLOUD_PROFILE
+        names = self._cloud_profile_names()
+        if value in names:
+            return value
+        folded = [name for name in names if name.casefold() == value.casefold()]
+        return folded[0] if len(folded) == 1 else None
+
+    def _describe_cloud_connection(self, conn):
+        """只展示接口类型和模型，绝不在聊天里暴露地址或 Key。"""
+        label = self.CLOUD_PROVIDER_LABELS.get(conn["provider"], conn["provider"])
+        text = f"{label} · {conn['model']}"
+        missing = [
+            label for label, key in (("地址", "base_url"), ("Key", "api_key"))
+            if not conn[key]
+        ]
+        if missing:
+            text += f"（未填{'/'.join(missing)}）"
+        return text
+
+    def _cloud_profile_overview(self):
+        active = self._active_cloud_profile()[0]
+        lines = [f"☁️ 云绘图方案（当前：{active}）"]
+        for name in self._cloud_profile_names():
+            mark = "  ←当前" if name == active else ""
+            lines.append(
+                f"· {name} — {self._describe_cloud_connection(self._cloud_connection(name))}{mark}"
+            )
+        lines.extend([
+            "",
+            "切换方案：/云绘图切换 <方案名> [模型名]",
+            "只换模型：/云绘图模型 <模型名>",
+            "（切换仅限管理员；新方案在插件配置 cloud_profiles 中添加）",
+        ])
+        return "\n".join(lines)
+
+    @filter.command("云绘图切换", alias={"云切换", "切换云绘图", "cloudswitch"})
+    async def cloud_switch(self, event: AstrMessageEvent):
+        """查看或切换云绘图方案（接口类型、地址、Key、模型）；切换仅限管理员，全局生效。"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield event.plain_result(notice)
+            return
+        raw = self._strip_command(
+            event.message_str, {"云绘图切换", "云切换", "切换云绘图", "cloudswitch"}
+        )
+        args = raw.split()
+        if not args:
+            yield event.plain_result(self._cloud_profile_overview())
+            return
+        if not self._is_admin(event):
+            yield event.plain_result("只有管理员能切换全局云绘图方案。")
+            return
+        if len(args) > 2:
+            yield event.plain_result("用法：/云绘图切换 <方案名> [模型名]（方案名和模型名中不能有空格）")
+            return
+
+        target = self._match_cloud_profile(args[0])
+        if target is None:
+            yield event.plain_result(
+                f"找不到云绘图方案「{args[0]}」。可选：{'、'.join(self._cloud_profile_names())}\n"
+                "新方案请在插件配置 cloud_profiles 中添加。"
+            )
+            return
+        model = args[1] if len(args) > 1 else None
+        if model is not None and not self._valid_model_name(model):
+            yield event.plain_result("模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
+            return
+
+        self.config["active_cloud_profile"] = (
+            "" if target == self.DEFAULT_CLOUD_PROFILE else target
+        )
+        if model:
+            self._set_cloud_model(target, model)
+        saved = self._save_config()
+        conn = self._cloud_connection()
+        lines = [f"✅ 云绘图已切换到「{target}」：{self._describe_cloud_connection(conn)}"]
+        if not conn["base_url"] or not conn["api_key"]:
+            lines.append("⚠️ 这个方案还缺少地址或 Key，出图前请在插件配置里补填。")
+        if not saved:
+            lines.append("⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。")
+        yield event.plain_result("\n".join(lines))
+
+    @filter.command("云绘图模型", alias={"云模型", "cloudmodel"})
+    async def cloud_model(self, event: AstrMessageEvent):
+        """查看或修改当前云绘图方案使用的模型；修改仅限管理员，全局生效。"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield event.plain_result(notice)
+            return
+        raw = self._strip_command(event.message_str, {"云绘图模型", "云模型", "cloudmodel"})
+        args = raw.split()
+        conn = self._cloud_connection()
+        if not args:
+            yield event.plain_result(
+                f"当前云绘图方案「{conn['name']}」：{self._describe_cloud_connection(conn)}\n"
+                "用法：/云绘图模型 <模型名>（仅管理员）"
+            )
+            return
+        if not self._is_admin(event):
+            yield event.plain_result("只有管理员能修改云绘图模型。")
+            return
+        if len(args) != 1 or not self._valid_model_name(args[0]):
+            yield event.plain_result("模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
+            return
+        self._set_cloud_model(conn["name"], args[0])
+        saved = self._save_config()
+        conn = self._cloud_connection()
+        text = f"✅ 方案「{conn['name']}」的模型已改为 {conn['model']}。"
+        if not saved:
+            text += "\n⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。"
+        yield event.plain_result(text)
+
     def _cloud_preset_text(self):
         """云绘图预设的文字兜底内容。"""
         lines = ["🎨 云绘图快捷预设"]
@@ -1549,6 +1676,9 @@ class ComfyUIDrawPlugin(Star):
         progress_message_id = None
         if self.config.get("show_progress", True):
             parts = []
+            profile_name = self._active_cloud_profile()[0]
+            if profile_name != self.DEFAULT_CLOUD_PROFILE:
+                parts.append(f"方案={profile_name}")
             if preset_name:
                 parts.append(f"预设={preset_name}")
             if gemini_config:
@@ -1639,20 +1769,106 @@ class ComfyUIDrawPlugin(Star):
         expanded = str(item["prompt"]).replace("{subject}", str(prompt or "").strip())
         return expanded, canonical, item.get("size")
 
+    # ------------------------------------------------------------------ #
+    # 云绘图方案：cloud_profiles 中的命名方案可覆盖顶层的地址 / Key / 模型，
+    # active_cloud_profile 为空时使用顶层配置（即「默认」方案）。
+    # ------------------------------------------------------------------ #
+    CLOUD_PROVIDERS = ("auto", "chatgpt2api", "openai-compatible", "sub2api-antigravity")
+    DEFAULT_CLOUD_PROFILE = "默认"
+
+    @classmethod
+    def _normalize_cloud_provider(cls, value, fallback="auto"):
+        provider = str(value or "").strip().lower()
+        return provider if provider in cls.CLOUD_PROVIDERS else fallback
+
+    def _cloud_profiles(self) -> dict:
+        """返回 {方案名: 配置项}；跳过无名称、重名或与「默认」同名的条目。"""
+        result = {}
+        for item in self.config.get("cloud_profiles", []) or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "") or "").strip()
+            if not name or name == self.DEFAULT_CLOUD_PROFILE or name in result:
+                continue
+            result[name] = item
+        return result
+
+    def _active_cloud_profile(self):
+        """返回 (方案名, 方案配置或 None)；找不到已选方案时安全回退到「默认」。"""
+        name = str(self.config.get("active_cloud_profile", "") or "").strip()
+        if not name or name == self.DEFAULT_CLOUD_PROFILE:
+            return self.DEFAULT_CLOUD_PROFILE, None
+        profile = self._cloud_profiles().get(name)
+        if profile is None:
+            logger.warning(f"[comfyui_draw] 云绘图方案「{name}」不存在，已回退到默认配置。")
+            return self.DEFAULT_CLOUD_PROFILE, None
+        return name, profile
+
+    @staticmethod
+    def _default_cloud_model(provider):
+        return "gemini-3.1-flash-image" if provider == "sub2api-antigravity" else "gpt-image-2"
+
+    def _global_model_key(self, provider):
+        return "gemini_image_model" if provider == "sub2api-antigravity" else "openai_image_model"
+
+    def _cloud_connection(self, name=None):
+        """解析某个方案（默认为当前方案）实际使用的接口类型、地址、Key 和模型。
+
+        方案里留空的地址 / Key / 模型沿用顶层配置，方便同一站点只换接口类型或模型。
+        """
+        if name is None:
+            name, profile = self._active_cloud_profile()
+        elif name == self.DEFAULT_CLOUD_PROFILE:
+            profile = None
+        else:
+            profile = self._cloud_profiles().get(name)
+        profile = profile or {}
+        top_provider = self._normalize_cloud_provider(self.config.get("openai_image_provider", "auto"))
+        provider = self._normalize_cloud_provider(profile.get("provider"), top_provider)
+
+        def pick(key, config_key):
+            value = str(profile.get(key, "") or "").strip()
+            return value or str(self.config.get(config_key, "") or "").strip()
+
+        model = (
+            str(profile.get("model", "") or "").strip()
+            or str(self.config.get(self._global_model_key(provider), "") or "").strip()
+            or self._default_cloud_model(provider)
+        )
+        return {
+            "name": name,
+            "provider": provider,
+            "base_url": pick("base_url", "openai_image_base_url"),
+            "api_key": pick("api_key", "openai_image_api_key"),
+            "model": model,
+        }
+
     def _openai_image_provider(self) -> str:
-        provider = str(
-            self.config.get("openai_image_provider", "auto") or "auto"
-        ).strip().lower()
-        if provider not in {
-            "auto", "chatgpt2api", "openai-compatible", "sub2api-antigravity"
-        }:
-            return "auto"
-        return provider
+        return self._cloud_connection()["provider"]
 
     def _cloud_image_model(self) -> str:
-        if self._openai_image_provider() == "sub2api-antigravity":
-            return str(self.config.get("gemini_image_model", "") or "").strip() or "gemini-3.1-flash-image"
-        return str(self.config.get("openai_image_model", "") or "").strip() or "gpt-image-2"
+        return self._cloud_connection()["model"]
+
+    @staticmethod
+    def _valid_model_name(value):
+        text = str(value or "").strip()
+        if not text or len(text) > 200:
+            return False
+        return all((ch.isascii() and ch.isalnum()) or ch in "._-:/@" for ch in text)
+
+    def _cloud_profile_hint(self, conn):
+        """缺少地址 / Key 时，提示可以在当前方案里补填。"""
+        if conn["name"] == self.DEFAULT_CLOUD_PROFILE:
+            return ""
+        return f"（或在云绘图方案「{conn['name']}」中填写）"
+
+    def _set_cloud_model(self, profile_name, model):
+        """把模型写入指定方案；「默认」方案写回对应接口类型的顶层模型配置。"""
+        if profile_name == self.DEFAULT_CLOUD_PROFILE:
+            provider = self._cloud_connection(profile_name)["provider"]
+            self.config[self._global_model_key(provider)] = model
+        else:
+            self._cloud_profiles()[profile_name]["model"] = model
 
     @staticmethod
     def _antigravity_image_url(base: str, model: str) -> str:
@@ -1797,11 +2013,14 @@ class ComfyUIDrawPlugin(Star):
 
     async def _run_antigravity_image(self, prompt, size=None, n=1, source_images=None, quality=None, style=None):
         """原生绘图；仅对明确的比例参数 400 拒绝做一次兼容回退。"""
-        base = str(self.config.get("openai_image_base_url", "") or "").strip()
-        key = str(self.config.get("openai_image_api_key", "") or "").strip()
+        conn = self._cloud_connection()
+        base, key = conn["base_url"], conn["api_key"]
         if not base or not key:
-            raise ComfyUIError("请先填写 Sub2API 的 openai_image_base_url 和 openai_image_api_key。")
-        url = self._antigravity_image_url(base, self._cloud_image_model())
+            raise ComfyUIError(
+                "请先填写 Sub2API 的 openai_image_base_url 和 openai_image_api_key"
+                + self._cloud_profile_hint(conn) + "。"
+            )
+        url = self._antigravity_image_url(base, conn["model"])
         image_config = self._gemini_image_config(size, quality)
         aspect_mode = self._gemini_aspect_mode()
         parts = []
@@ -1901,10 +2120,12 @@ class ComfyUIDrawPlugin(Star):
         """读取 ChatGPT2API 的公开健康信息与账号池额度统计。"""
         if self._openai_image_provider() == "sub2api-antigravity":
             raise ComfyUIError("Antigravity 模式暂不支持 /云绘图额度，请在 Sub2API 控制台查看余额与分组额度。")
-        base = str(self.config.get("openai_image_base_url", "") or "").strip()
+        conn = self._cloud_connection()
+        base = conn["base_url"]
         if not base:
             raise ComfyUIError(
-                "未配置云端绘图地址，请先填写 openai_image_base_url。"
+                "未配置云端绘图地址，请先填写 openai_image_base_url"
+                + self._cloud_profile_hint(conn) + "。"
             )
         root = self._openai_project_root(base)
         if not root:
@@ -2003,13 +2224,18 @@ class ComfyUIDrawPlugin(Star):
         失败抛出 ComfyUIError / asyncio.TimeoutError。"""
         if self._openai_image_provider() == "sub2api-antigravity":
             return await self._run_antigravity_image(prompt, size, n, quality=quality, style=style)
-        base = str(self.config.get("openai_image_base_url", "") or "").strip().rstrip("/")
-        key = str(self.config.get("openai_image_api_key", "") or "").strip()
-        model = str(self.config.get("openai_image_model", "") or "").strip() or "gpt-image-2"
+        conn = self._cloud_connection()
+        base, key, model = conn["base_url"].rstrip("/"), conn["api_key"], conn["model"]
         if not base:
-            raise ComfyUIError("未配置云端绘图地址，请在插件配置里填写 openai_image_base_url。")
+            raise ComfyUIError(
+                "未配置云端绘图地址，请在插件配置里填写 openai_image_base_url"
+                + self._cloud_profile_hint(conn) + "。"
+            )
         if not key:
-            raise ComfyUIError("未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key。")
+            raise ComfyUIError(
+                "未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key"
+                + self._cloud_profile_hint(conn) + "。"
+            )
 
         urls = self._openai_image_urls(base)
         body = {"model": model, "prompt": prompt, "n": max(1, int(n))}
@@ -2055,20 +2281,17 @@ class ComfyUIDrawPlugin(Star):
             if not source_images:
                 raise ComfyUIError("图片编辑需要至少一张原图。")
             return await self._run_antigravity_image(prompt, size, n, source_images, quality=quality)
-        base = str(
-            self.config.get("openai_image_base_url", "") or ""
-        ).strip().rstrip("/")
-        key = str(self.config.get("openai_image_api_key", "") or "").strip()
-        model = str(
-            self.config.get("openai_image_model", "") or ""
-        ).strip() or "gpt-image-2"
+        conn = self._cloud_connection()
+        base, key, model = conn["base_url"].rstrip("/"), conn["api_key"], conn["model"]
         if not base:
             raise ComfyUIError(
-                "未配置云端绘图地址，请在插件配置里填写 openai_image_base_url。"
+                "未配置云端绘图地址，请在插件配置里填写 openai_image_base_url"
+                + self._cloud_profile_hint(conn) + "。"
             )
         if not key:
             raise ComfyUIError(
-                "未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key。"
+                "未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key"
+                + self._cloud_profile_hint(conn) + "。"
             )
         if not source_images:
             raise ComfyUIError("图片编辑需要至少一张原图。")
@@ -3219,6 +3442,8 @@ class ComfyUIDrawPlugin(Star):
             "/云绘图 <提示词> [参数]  云端出图；有原图时自动图片编辑（别名 gptdraw）\n"
             "/变手办                 引用/附带原图，一键转换成手办（别名 手办化）\n"
             "/云绘图预设             查看手办、头像、海报等快捷预设\n"
+            "/云绘图切换 [方案] [模型]  查看 / 切换云绘图接口方案（切换仅管理员）\n"
+            "/云绘图模型 [模型名]    查看 / 修改当前方案的模型（修改仅管理员）\n"
             "/云绘图额度             查看 ChatGPT2API 账号池额度（默认仅管理员）\n"
             "/绘图列表              查看可用工作流（别名 drawlist）\n"
             "/绘图状态              检查 ComfyUI 是否在线（别名 drawstatus）\n"

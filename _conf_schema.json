@@ -218,6 +218,61 @@
     "description": "出图后附带种子等参数信息",
     "default": true
   },
+  "active_cloud_profile": {
+    "type": "string",
+    "description": "当前使用的云绘图方案",
+    "hint": "填下方 cloud_profiles 里的方案名；留空表示使用下面的默认云绘图配置。管理员也可以在聊天中发送 /云绘图切换 <方案名> 在线切换。",
+    "default": ""
+  },
+  "cloud_profiles": {
+    "type": "template_list",
+    "description": "云绘图方案（可选，用于在线切换）",
+    "hint": "保存多套云绘图接口，例如一套 ChatGPT2API、一套 Sub2API Antigravity。方案里留空的地址 / Key / 模型会沿用下面的默认云绘图配置。发送 /云绘图切换 查看与切换。",
+    "templates": {
+      "profile": {
+        "name": "云绘图方案",
+        "display_item": "name",
+        "items": {
+          "name": {
+            "type": "string",
+            "description": "方案名称",
+            "hint": "切换时使用，如 GPT、Gemini。不能叫「默认」，名称中不要有空格。",
+            "default": ""
+          },
+          "provider": {
+            "type": "string",
+            "description": "接口类型",
+            "hint": "含义同 openai_image_provider。",
+            "default": "auto",
+            "options": [
+              "auto",
+              "chatgpt2api",
+              "openai-compatible",
+              "sub2api-antigravity"
+            ]
+          },
+          "base_url": {
+            "type": "string",
+            "description": "API 地址",
+            "hint": "留空则沿用 openai_image_base_url。",
+            "default": ""
+          },
+          "api_key": {
+            "type": "string",
+            "description": "API Key",
+            "hint": "留空则沿用 openai_image_api_key。注意：不同站点请分别填写，避免把一个站点的 Key 发给另一个站点。",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "description": "模型名",
+            "hint": "留空则按接口类型沿用 openai_image_model 或 gemini_image_model。也可用 /云绘图模型 在线修改。",
+            "default": ""
+          }
+        }
+      }
+    }
+  },
   "openai_image_provider": {
     "type": "string",
     "description": "云端绘图接口类型",
