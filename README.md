@@ -57,7 +57,9 @@ AstrBot/
 | `auto_randomize_seed` | 每次自动随机种子（默认开）。 |
 | `max_concurrent_tasks` | 最大并发生成任务数。 |
 | `timeout` | 单次生成超时（秒）。 |
-| `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api` 或 `openai-compatible`。 |
+| `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
+| `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。 |
+| `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api`、`openai-compatible` 或 `sub2api-antigravity`。 |
 | `openai_image_base_url` | 云端绘图接口基址。ChatGPT2API 可直接填项目根地址，插件会自动补文生图 `/v1/images/generations` 或图片编辑 `/v1/images/edits`。默认留空。 |
 | `openai_quota_admin_only` | `/云绘图额度` 是否仅限 AstrBot 管理员使用，默认开启。 |
 | `openai_image_api_key` | 云端绘图 API Key（Bearer Token）。**按量付费，调用会消耗额度。** |
@@ -156,6 +158,8 @@ AstrBot/
 | `/云绘图` | 用云端 GPT-Image 接口出图（按量付费） | `/gptdraw`、`/gptimage`、`/clouddraw` |
 | `/变手办` | 引用或附带原图，一键用云端图片编辑转换成手办 | `/手办化`、`/figureme` |
 | `/云绘图预设` | 用图片卡片查看云绘图预设、尺寸与使用示例 | `/云预设`、`/gpt预设` |
+| `/云绘图切换` | 查看云绘图方案；管理员可切换方案（可同时指定模型），全局生效 | `/云切换`、`/cloudswitch` |
+| `/云绘图模型` | 查看当前方案的模型；管理员可修改，全局生效 | `/云模型`、`/cloudmodel` |
 | `/云绘图额度` | 查看 ChatGPT2API 账号池的剩余额度与运行状态，默认仅管理员 | `/云额度`、`/绘图额度`、`/gptquota` |
 | `/绘图列表` | 查看可用工作流 | `/drawlist`、`/comfyui_list` |
 | `/绘图状态` | 检查 ComfyUI 是否在线 | `/drawstatus`、`/comfystatus` |
@@ -317,6 +321,30 @@ Authorization: Bearer <Sub2API API Key>
 - 手办、毛绒、海报、UI 等预设继续可用；`daily_me_backend=cloud` 时，「二次元的我」也使用此渠道，保留每日一次、引用回复、资料卡与原图。
 - Sub2API 管理员需要允许对应分组绘图、放行模型，并保证上游账号有对应模型权限和额度。404 请检查站点地址和版本；403 请检查 Key、分组权限及模型白名单。
 - Antigravity 模式暂不提供 `/云绘图额度` 查询，请在 Sub2API 控制台查看。此次适配使用离线响应模拟验证，未调用用户的付费接口；实际可用模型以你的站点为准。
+
+### 在线切换云绘图方案
+
+可以在插件配置的 `cloud_profiles` 中保存多套云绘图接口，例如：
+
+| 方案名 | 接口类型 | 地址 / Key | 模型 |
+| --- | --- | --- | --- |
+| GPT | `chatgpt2api` | ChatGPT2API 的地址和 Key | 留空（沿用 `openai_image_model`） |
+| Gemini | `sub2api-antigravity` | Sub2API 站点地址和 Key | `gemini-3-pro-image` |
+
+方案里留空的地址、Key、模型会沿用上面的默认云绘图配置；顶层配置本身就是名为「默认」的方案。
+
+```text
+/云绘图切换                       # 所有可用绘图的人都能查看方案列表和当前方案
+/云绘图切换 Gemini                # 管理员：切换到 Gemini 方案
+/云绘图切换 GPT gpt-image-2       # 管理员：切换方案并同时指定模型
+/云绘图切换 默认                  # 管理员：回到默认配置
+/云绘图模型 gemini-3.1-flash-image  # 管理员：只修改当前方案的模型
+```
+
+- 切换和改模型对所有群聊、私聊立即生效，并写回插件配置，重启后保留。
+- 聊天里只显示方案名、接口类型和模型，不会显示地址或 Key。
+- `/云绘图`、`/变手办`、云端「二次元的我」和 `/云绘图额度` 都使用当前方案。
+- 不同站点请分别填写 Key，避免把一个站点的 Key 发给另一个站点。
 
 ## 访问控制（白名单）
 
