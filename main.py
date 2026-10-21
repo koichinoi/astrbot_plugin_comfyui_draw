@@ -21,7 +21,7 @@ from .templates import (
     CLOUD_PRESET_CARD_TMPL,
     DAILY_ME_CARD_TMPL,
     DEFAULT_WORKFLOW,
-    DRAW_HELP_TMPL,
+    HELP_CARD_THEMES,
 )
 
 
@@ -1178,6 +1178,7 @@ class ComfyUIDrawPlugin(Star):
                     {"cmd": "/云绘图额度", "desc": "查看 ChatGPT2API 账号池剩余额度与状态", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
+                    {"cmd": "/绘图主题 [主题名]", "desc": "查看帮助卡片主题；切换仅限管理员", "admin": True},
                     {"cmd": "/绘图帮助", "desc": "显示这张帮助卡片", "admin": False},
                 ]},
             ]
@@ -1210,10 +1211,51 @@ class ComfyUIDrawPlugin(Star):
                 "mode_line": f"默认工作流：{default_wf} ｜ 提示词模式：{mode}（{mode_desc}）",
                 "scale": 2,
             }
-            return await self.html_render(DRAW_HELP_TMPL, data)
+            return await self.html_render(self._help_card_template(), data)
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[comfyui_draw] 帮助卡片渲染失败，改用文字帮助：{e}")
             return None
+
+    def _help_card_theme(self):
+        """返回当前帮助卡片主题名；配置了未知主题时回退到默认主题。"""
+        name = str(self.config.get("help_card_theme", "") or "").strip()
+        return name if name in HELP_CARD_THEMES else next(iter(HELP_CARD_THEMES))
+
+    def _help_card_template(self):
+        return HELP_CARD_THEMES[self._help_card_theme()][0]
+
+    @filter.command("绘图主题", alias={"帮助主题", "drawtheme"})
+    async def help_theme(self, event: AstrMessageEvent):
+        """查看或切换 /绘图帮助 卡片主题；切换仅限管理员，全局生效。"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield event.plain_result(notice)
+            return
+        name = self._strip_command(event.message_str, {"绘图主题", "帮助主题", "drawtheme"}).strip()
+        current = self._help_card_theme()
+        if not name:
+            lines = [f"🎨 帮助卡片主题（当前：{current}）"]
+            for theme, (_tmpl, desc) in HELP_CARD_THEMES.items():
+                mark = "  ←当前" if theme == current else ""
+                lines.append(f"· {theme} — {desc}{mark}")
+            lines.append("用法：/绘图主题 <主题名>（仅管理员），切换后发送 /绘图帮助 查看效果")
+            yield event.plain_result("\n".join(lines))
+            return
+        if not self._is_admin(event):
+            yield event.plain_result("只有管理员能切换帮助卡片主题。")
+            return
+        if name not in HELP_CARD_THEMES:
+            yield event.plain_result(f"没有「{name}」主题。可选：{'、'.join(HELP_CARD_THEMES)}")
+            return
+        if name == current:
+            yield event.plain_result(f"帮助卡片已经是「{name}」主题了。")
+            return
+        self.config["help_card_theme"] = name
+        text = f"✅ 帮助卡片已切换为「{name}」主题，发送 /绘图帮助 查看效果。"
+        if not self._save_config():
+            text += "\n⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。"
+        yield event.plain_result(text)
 
     @filter.command("绘图默认", alias={"drawdefault", "setdefault", "comfyui_default"})
     async def set_default(self, event: AstrMessageEvent):
@@ -3503,6 +3545,7 @@ class ComfyUIDrawPlugin(Star):
             "/绘图状态              检查 ComfyUI 是否在线（别名 drawstatus）\n"
             "/绘图默认 [工作流名]    查看 / 切换默认工作流（别名 drawdefault）\n"
             "/二次元的我          抽取今日的二次元少女形象，每人每天一次（别名 每日二次元）\n"
+            "/绘图主题 [主题名]      查看 / 切换帮助卡片主题（切换仅管理员）\n"
             "/绘图帮助              显示本帮助（别名 drawhelp）\n"
             "\n"
             "【可选参数】（都可省略）\n"

@@ -346,3 +346,187 @@ DAILY_ME_CARD_TMPL = """
 </html>
 """
 
+
+
+# 帮助卡片「神社」主题：朱红与和纸配色，鸟居、注连绳、纸垂、绘马与樱花瓣等通用神社元素。
+# 与默认模板共用同一份数据（groups / params / examples / wf_line / mode_line / scale）。
+SHRINE_HELP_TMPL = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;
+    background: #f6efe2;
+  }
+  .card {
+    width: 820px; zoom: {{ scale | default(2) }}; position: relative; overflow: hidden; color: #4a3a32;
+    background:
+      radial-gradient(circle at 0 100%, transparent 18px, rgba(200,52,43,0.045) 19px, transparent 21px) 0 0 / 40px 20px,
+      radial-gradient(circle at 20px 100%, transparent 18px, rgba(200,52,43,0.045) 19px, transparent 21px) 0 10px / 40px 20px,
+      linear-gradient(180deg, #fbf6ec 0%, #f7efe0 60%, #f3e8d5 100%);
+  }
+  .serif { font-family: "Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif; }
+
+  /* 顶部朱红横幅 */
+  .banner {
+    position: relative; padding: 26px 34px 34px 34px; color: #fff8ec;
+    background: linear-gradient(170deg, #cf3a2f 0%, #b52c24 70%, #a3271f 100%);
+  }
+  .banner::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 14px;
+    background: radial-gradient(circle at 10px -4px, transparent 12px, #fbf6ec 13px) 0 0 / 20px 14px repeat-x;
+  }
+  .hd { display: flex; justify-content: space-between; align-items: center; }
+  .hd-l { display: flex; align-items: center; gap: 16px; }
+  .title { font-size: 31px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 2px 0 rgba(90,16,12,0.35); }
+  .subtitle { font-size: 14px; color: #ffe2cf; margin-top: 6px; letter-spacing: 1px; }
+
+  /* 绘马牌徽记 */
+  .ema {
+    position: relative; width: 104px; padding: 18px 8px 10px 8px; text-align: center;
+    background: linear-gradient(180deg, #e9c98f 0%, #d9b06c 100%); color: #5b3a1c;
+    clip-path: polygon(50% 0, 100% 22%, 100% 100%, 0 100%, 0 22%);
+    box-shadow: inset 0 0 0 3px rgba(120,72,30,0.25);
+  }
+  .ema::before {
+    content: ""; position: absolute; top: 7px; left: 50%; width: 8px; height: 8px; margin-left: -4px;
+    border-radius: 50%; background: #7a4b22;
+  }
+  .ema-t { font-size: 20px; font-weight: 900; letter-spacing: 6px; line-height: 1.1; }
+  .ema-s { font-size: 10.5px; font-weight: 700; letter-spacing: 2px; margin-top: 4px; color: #8a5a2b; }
+
+  /* 注连绳与纸垂 */
+  .rope { display: block; width: 820px; height: 58px; margin-top: -6px; position: relative; z-index: 2; }
+
+  .petal {
+    position: absolute; width: 14px; height: 10px; border-radius: 70% 0 70% 0;
+    background: linear-gradient(135deg, #f7c6cc, #ee9fab); opacity: 0.75; pointer-events: none;
+  }
+
+  .body { position: relative; z-index: 1; padding: 2px 26px 6px 26px; }
+  .group {
+    position: relative; background: rgba(255,253,248,0.94); border-radius: 6px;
+    padding: 16px 22px 14px 26px; margin-bottom: 15px;
+    border: 1px solid #ecdcc4; box-shadow: 0 4px 14px rgba(140,90,40,0.10);
+  }
+  .group::before {
+    content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 5px;
+    border-radius: 0 3px 3px 0; background: #c8342b;
+  }
+  .group-h {
+    font-size: 17px; font-weight: 900; color: #a8291f; letter-spacing: 1px;
+    padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1.5px solid #f0e2cc;
+  }
+  .cmd { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px; }
+  .cmd + .cmd { border-top: 1px dashed #f0e2cc; }
+  .cmd-name { flex-shrink: 0; min-width: 196px; font-weight: 800; font-size: 14.5px; color: #8e2a20; }
+  .cmd-desc { flex: 1; font-size: 13px; line-height: 1.55; color: #6b5548; }
+  .cmd-tag {
+    flex-shrink: 0; align-self: center; font-size: 10.5px; font-weight: 900; letter-spacing: 1px;
+    padding: 2px 6px; border-radius: 4px; color: #c8342b; border: 1.5px solid #c8342b;
+    transform: rotate(-4deg); background: rgba(200,52,43,0.06);
+  }
+  .pgrid { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .pi { width: 47%; display: flex; align-items: baseline; gap: 9px; padding: 4px 0; }
+  .pn {
+    flex-shrink: 0; font-family: Consolas, Menlo, monospace; font-size: 12.5px; font-weight: 700;
+    background: #fff6ea; color: #9e2e22; padding: 2px 8px; border-radius: 4px; border: 1px solid #ebc9a8;
+  }
+  .pd { font-size: 12.5px; color: #6b5548; }
+  .ex {
+    border-radius: 4px; padding: 10px 15px;
+    background: repeating-linear-gradient(180deg, #fffaf1 0, #fffaf1 25px, #f1e4cf 25px, #f1e4cf 26px);
+  }
+  .ex-l { font-family: Consolas, Menlo, monospace; font-size: 13px; color: #4a3a32; line-height: 26px; }
+  .info { text-align: center; font-size: 12.5px; color: #8a6e5c; margin: 6px 0 2px 0; line-height: 1.8; }
+  .footer {
+    position: relative; z-index: 1; text-align: center; padding: 15px; margin-top: 8px;
+    color: #fff1e2; font-size: 13px; letter-spacing: 2px; background: #b52c24;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <span class="petal" style="top:250px;left:760px;transform:rotate(25deg);"></span>
+  <span class="petal" style="top:420px;left:14px;transform:rotate(-30deg);"></span>
+  <span class="petal" style="top:640px;left:790px;transform:rotate(60deg);width:11px;height:8px;"></span>
+  <span class="petal" style="bottom:210px;left:22px;transform:rotate(15deg);"></span>
+  <span class="petal" style="bottom:90px;left:780px;transform:rotate(-50deg);width:12px;height:9px;"></span>
+
+  <div class="banner">
+    <div class="hd">
+      <div class="hd-l">
+        <svg width="74" height="62" viewBox="0 0 120 100" aria-hidden="true">
+          <path d="M2 13 Q60 1 118 13 L116 22 Q60 11 4 22 Z" fill="#fff4e4"/>
+          <rect x="13" y="22" width="94" height="6" fill="#3a2420" opacity="0.55"/>
+          <rect x="17" y="35" width="86" height="7" rx="1" fill="#fff4e4"/>
+          <rect x="55" y="27" width="10" height="9" fill="#fff4e4"/>
+          <rect x="27" y="22" width="10" height="72" fill="#fff4e4"/>
+          <rect x="83" y="22" width="10" height="72" fill="#fff4e4"/>
+          <rect x="23" y="90" width="18" height="7" rx="1" fill="#3a2420" opacity="0.55"/>
+          <rect x="79" y="90" width="18" height="7" rx="1" fill="#3a2420" opacity="0.55"/>
+        </svg>
+        <div>
+          <div class="title serif">绘马堂 · 绘图帮助</div>
+          <div class="subtitle">写下心愿，交给画笔来实现～</div>
+        </div>
+      </div>
+      <div class="ema serif">
+        <div class="ema-t">奉纳</div>
+        <div class="ema-s">绘 马 堂</div>
+      </div>
+    </div>
+  </div>
+
+  <svg class="rope" viewBox="0 0 820 58" aria-hidden="true">
+    <path d="M0 10 Q205 30 410 14 T820 10" fill="none" stroke="#b98c4e" stroke-width="9" stroke-linecap="round"/>
+    <path d="M0 10 Q205 30 410 14 T820 10" fill="none" stroke="#e2c58f" stroke-width="9"
+          stroke-dasharray="7 9" stroke-linecap="round"/>
+    {% for x in [150, 330, 490, 670] %}
+    <polyline points="{{ x }},20 {{ x + 9 }},20 {{ x + 2 }},31 {{ x + 11 }},31 {{ x + 4 }},43 {{ x + 13 }},43 {{ x + 6 }},55"
+              fill="none" stroke="#bfa98a" stroke-width="8" stroke-linejoin="round"/>
+    <polyline points="{{ x }},20 {{ x + 9 }},20 {{ x + 2 }},31 {{ x + 11 }},31 {{ x + 4 }},43 {{ x + 13 }},43 {{ x + 6 }},55"
+              fill="none" stroke="#ffffff" stroke-width="5" stroke-linejoin="round"/>
+    {% endfor %}
+  </svg>
+
+  <div class="body">
+    {% for g in groups %}
+    <div class="group">
+      <div class="group-h serif">{{ g.title }}</div>
+      {% for c in g['items'] %}
+      <div class="cmd"><span class="cmd-name">{{ c.cmd }}</span><span class="cmd-desc">{{ c.desc }}</span>{% if c.admin %}<span class="cmd-tag">管理员</span>{% endif %}</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="group">
+      <div class="group-h serif">&#127899;&#65039; 可选参数（跟在提示词后，均可省略）</div>
+      <div class="pgrid">
+        {% for p in params %}<div class="pi"><span class="pn">{{ p.name }}</span><span class="pd">{{ p.desc }}</span></div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-h serif">&#128221; 示例</div>
+      <div class="ex">{% for e in examples %}<div class="ex-l">{{ e }}</div>{% endfor %}</div>
+    </div>
+
+    <div class="info">{{ wf_line }}<br/>{{ mode_line }}</div>
+  </div>
+
+  <div class="footer serif">&#127800; 绘马堂 ｜ 愿今日所绘，皆如所愿。</div>
+</div>
+</body>
+</html>
+"""
+
+
+# 帮助卡片可选主题：名称 -> (模板, 一句话说明)。第一个为默认主题。
+HELP_CARD_THEMES = {
+    "默认": (DRAW_HELP_TMPL, "淡紫蓝画室风格"),
+    "神社": (SHRINE_HELP_TMPL, "朱红和纸、鸟居与注连绳的和风神社风格"),
+}
