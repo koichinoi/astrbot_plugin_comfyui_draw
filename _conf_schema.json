@@ -357,6 +357,12 @@
     "hint": "OpenAI 模式：留空用接口默认，常见 standard / hd 或 low / medium / high / auto。Antigravity 模式忽略此配置，使用独立的 gemini_image_resolution；命令 --quality 1K、2K、4K 可临时覆盖。",
     "default": ""
   },
+  "cloud_default_art_style": {
+    "type": "string",
+    "description": "云绘图默认美术风格（写进提示词）",
+    "hint": "普通 /云绘图 和 AI 绘图工具在没有使用预设、也没写 --style 时，会把这段画风要求追加到提示词末尾；描述里明确写了其他画风（如“真人照片”）时以描述为准。清空则不追加。注意：这与下方 openai_image_style（vivid/natural 接口参数）不同。",
+    "default": "日系二次元动漫插画，干净线稿，赛璐璐上色，不要真人照片或写实风格"
+  },
   "openai_image_style": {
     "type": "string",
     "description": "云端绘图默认画风（style）",

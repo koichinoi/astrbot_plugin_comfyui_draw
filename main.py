@@ -1049,6 +1049,7 @@ class ComfyUIDrawPlugin(Star):
                     daily_card=self.config.get("daily_me_result_card", True),
                     reply_to_source=self.config.get("daily_me_reply_source", True),
                     allow_image_edit=False,
+                    apply_default_style=False,
                 ):
                     yield result
                 return
@@ -1658,6 +1659,7 @@ class ComfyUIDrawPlugin(Star):
         daily_card: bool = False,
         reply_to_source: bool = False,
         allow_image_edit: bool = True,
+        apply_default_style: bool = True,
     ):
         """共享云端出图流程；有原图时自动图片编辑，否则文生图。"""
         try:
@@ -1683,6 +1685,14 @@ class ComfyUIDrawPlugin(Star):
             prompt, preset_name, preset_size = self._apply_cloud_prompt_preset(
                 prompt, opts.get("preset")
             )
+            # 普通文生图没有指定预设或 --style 时补上默认画风，避免模型自行选择写实照片。
+            if (
+                apply_default_style
+                and not source_images
+                and not preset_name
+                and not str(opts.get("style") or "").strip()
+            ):
+                prompt = self._with_default_art_style(prompt)
             if (
                 source_images
                 and not size_was_explicit
@@ -1802,6 +1812,18 @@ class ComfyUIDrawPlugin(Star):
             show_info=bool(caption_prefix),
         )
         yield event.chain_result(self._maybe_forward(event, chain, opts))
+
+    DEFAULT_CLOUD_ART_STYLE = "日系二次元动漫插画，干净线稿，赛璐璐上色，不要真人照片或写实风格"
+
+    def _with_default_art_style(self, prompt):
+        """追加默认画风；配置中显式留空时不追加。用户描述里写明的画风优先。"""
+        if "cloud_default_art_style" in self.config:
+            style = str(self.config.get("cloud_default_art_style") or "").strip()
+        else:
+            style = self.DEFAULT_CLOUD_ART_STYLE
+        if not style:
+            return prompt
+        return f"{prompt}\n画风要求：{style}（如果上面的描述明确要求了其他画风，以描述为准）"
 
     def _apply_cloud_prompt_preset(self, prompt: str, requested: str = None):
         """应用云绘图提示词预设，返回（扩展后的提示词、规范名称、建议尺寸）。"""
