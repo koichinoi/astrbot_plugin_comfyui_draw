@@ -22,6 +22,8 @@ AstrBot/
     └── plugins/
         └── astrbot_plugin_comfyui_draw/
             ├── main.py
+            ├── presets.py
+            ├── templates.py
             ├── metadata.yaml
             ├── _conf_schema.json
             ├── requirements.txt
@@ -30,6 +32,8 @@ AstrBot/
 ```
 
 然后在 AstrBot WebUI 的插件页面重载插件（或重启 AstrBot）。
+
+> 从 v1.11.2 起插件由多个 `.py` 文件组成，手动升级时请替换整个文件夹，不要只覆盖 `main.py`。
 
 ---
 
