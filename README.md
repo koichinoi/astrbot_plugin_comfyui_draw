@@ -65,6 +65,7 @@ AstrBot/
 | `openai_quota_admin_only` | `/云绘图额度` 是否仅限 AstrBot 管理员使用，默认开启。 |
 | `openai_image_api_key` | 云端绘图 API Key（Bearer Token）。**按量付费，调用会消耗额度。** |
 | `openai_image_model` | 云端绘图模型名，如 `gpt-image-2`。 |
+| `cloud_default_art_style` | 云绘图默认美术风格，默认日系二次元插画。普通 `/云绘图` 未使用预设或 `--style` 时追加到提示词；描述中写明其他画风时以描述为准，清空则不追加。 |
 | `openai_image_size` | 云端文生图默认尺寸；GPT-Image 2 还支持符合限制的自定义宽高。 |
 | `openai_image_edit_max_inputs` | 云端图片编辑最多读取几张原图，默认 4；支持当前消息和引用消息。 |
 | `openai_image_edit_use_source_size` | 图生图未写 `--size` 时沿用第一张原图分辨率，默认开启。 |
