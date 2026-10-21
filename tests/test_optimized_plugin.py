@@ -111,9 +111,16 @@ sys.modules.update(
     }
 )
 
-main_path = Path(__file__).resolve().parents[1] / "main.py"
-spec = importlib.util.spec_from_file_location("optimized_plugin", main_path)
+# 与 AstrBot 一样把插件目录作为包加载，main.py 才能相对导入 presets / templates。
+plugin_root = Path(__file__).resolve().parents[1]
+package = types.ModuleType("comfyui_draw_plugin")
+package.__path__ = [str(plugin_root)]
+sys.modules[package.__name__] = package
+spec = importlib.util.spec_from_file_location(
+    f"{package.__name__}.main", plugin_root / "main.py"
+)
 module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 Plugin = module.ComfyUIDrawPlugin
 PluginError = module.ComfyUIError

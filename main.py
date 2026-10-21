@@ -16,349 +16,13 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, Mess
 from astrbot.api.star import Context, Star
 import astrbot.api.message_components as Comp
 
-
-# 内置的 SD1.5 文生图示例工作流（API 格式）。
-# 当用户没有在配置里填写「默认工作流」时使用这一份。
-# 占位符全部用引号包裹，保证它本身就是合法 JSON。
-DEFAULT_WORKFLOW = """{
-  "3": {
-    "class_type": "KSampler",
-    "inputs": {
-      "seed": "%seed%",
-      "steps": "%steps%",
-      "cfg": "%cfg%",
-      "sampler_name": "euler",
-      "scheduler": "normal",
-      "denoise": 1,
-      "model": ["4", 0],
-      "positive": ["6", 0],
-      "negative": ["7", 0],
-      "latent_image": ["5", 0]
-    }
-  },
-  "4": {
-    "class_type": "CheckpointLoaderSimple",
-    "inputs": { "ckpt_name": "v1-5-pruned-emaonly.safetensors" }
-  },
-  "5": {
-    "class_type": "EmptyLatentImage",
-    "inputs": { "width": "%width%", "height": "%height%", "batch_size": "%batch_size%" }
-  },
-  "6": {
-    "class_type": "CLIPTextEncode",
-    "inputs": { "text": "%prompt%", "clip": ["4", 1] }
-  },
-  "7": {
-    "class_type": "CLIPTextEncode",
-    "inputs": { "text": "%negative_prompt%", "clip": ["4", 1] }
-  },
-  "8": {
-    "class_type": "VAEDecode",
-    "inputs": { "samples": ["3", 0], "vae": ["4", 2] }
-  },
-  "9": {
-    "class_type": "SaveImage",
-    "inputs": { "filename_prefix": "AstrBot", "images": ["8", 0] }
-  }
-}"""
-
-
-DRAW_HELP_TMPL = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif; background: #eef0fb; }
-  .card {
-    width: 820px; zoom: {{ scale | default(2) }}; position: relative; overflow: hidden; color: #5a6890;
-    background:
-      radial-gradient(circle at 12% 8%, rgba(246,198,168,0.4), transparent 24%),
-      radial-gradient(circle at 88% 10%, rgba(168,224,194,0.4), transparent 26%),
-      radial-gradient(circle at 8% 88%, rgba(243,182,203,0.38), transparent 26%),
-      radial-gradient(circle at 90% 90%, rgba(156,195,239,0.42), transparent 28%),
-      linear-gradient(162deg, #eaedfb 0%, #eef0fb 38%, #f3edfa 74%, #e9edfb 100%);
-  }
-  .hd { position: relative; display: flex; justify-content: space-between; align-items: center; padding: 28px 32px 8px 32px; }
-  .hd-l { display: flex; align-items: center; gap: 13px; }
-  .logo { font-size: 38px; }
-  .title { font-size: 29px; font-weight: 800; color: #6b7bc4; }
-  .subtitle { font-size: 14px; color: #8b96c8; margin-top: 4px; }
-  .emblem { border: 2px solid #cbb28c; border-radius: 13px; padding: 6px 15px; text-align: center; background: rgba(255,255,255,0.5); }
-  .emblem-i { font-size: 18px; line-height: 1; }
-  .emblem-t { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #a98a5f; line-height: 1.25; margin-top: 2px; }
-  .deco { position: absolute; opacity: 0.32; pointer-events: none; }
-  .body { position: relative; z-index: 1; padding: 12px 24px 6px 24px; }
-  .group {
-    background: #ffffff; border-radius: 18px; padding: 16px 22px; margin-bottom: 14px;
-    box-shadow: 0 6px 22px rgba(150,160,210,0.16);
-  }
-  .group-h { font-size: 16.5px; font-weight: 800; color: #6b7bc4; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1.5px dashed #e6e9f6; }
-  .cmd { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px; }
-  .cmd + .cmd { border-top: 1px solid #f1f3fb; }
-  .cmd-name { flex-shrink: 0; min-width: 190px; font-weight: 700; font-size: 14.5px; color: #5b78c4; }
-  .cmd-desc { flex: 1; font-size: 13px; line-height: 1.5; color: #6a76a0; }
-  .cmd-tag { flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 7px;
-             background: #fce8ef; color: #d97a9a; align-self: center; }
-  .pgrid { display: flex; flex-wrap: wrap; gap: 8px 18px; }
-  .pi { width: 47%; display: flex; align-items: baseline; gap: 9px; padding: 4px 0; }
-  .pn { flex-shrink: 0; font-family: Consolas, Menlo, monospace; font-size: 12.5px; font-weight: 700;
-        background: #eaf1fc; color: #5f80b6; padding: 2px 8px; border-radius: 8px; }
-  .pd { font-size: 12.5px; color: #6a76a0; }
-  .ex { background: #f4f6fd; border-radius: 12px; padding: 11px 15px; }
-  .ex-l { font-family: Consolas, Menlo, monospace; font-size: 13px; color: #5a6890; line-height: 2; }
-  .info { text-align: center; font-size: 12.5px; color: #8b96c8; margin: 6px 0 2px 0; line-height: 1.8; }
-  .footer { position: relative; z-index: 1; text-align: center; padding: 14px; margin-top: 6px;
-            color: #9aa6c2; font-size: 12.5px; border-top: 1px solid rgba(200,205,235,0.5); }
-</style>
-</head>
-<body>
-<div class="card">
-  <span class="deco" style="top:20px;left:290px;font-size:17px;">&#127912;</span>
-  <span class="deco" style="top:70px;right:200px;font-size:14px;">&#10024;</span>
-  <span class="deco" style="bottom:64px;left:28px;font-size:15px;">&#128396;&#65039;</span>
-  <span class="deco" style="bottom:110px;right:26px;font-size:16px;">&#127800;</span>
-
-  <div class="hd">
-    <div class="hd-l">
-      <div class="logo">&#127912;</div>
-      <div>
-        <div class="title">智乃的画室 · 绘图帮助</div>
-        <div class="subtitle">想画点什么？这些都交给智乃吧～</div>
-      </div>
-    </div>
-    <div class="emblem">
-      <div class="emblem-i">&#128396;&#65039;</div>
-      <div class="emblem-t">CHINO'S<br/>ATELIER</div>
-    </div>
-  </div>
-
-  <div class="body">
-    {% for g in groups %}
-    <div class="group">
-      <div class="group-h">{{ g.title }}</div>
-      {% for c in g['items'] %}
-      <div class="cmd"><span class="cmd-name">{{ c.cmd }}</span><span class="cmd-desc">{{ c.desc }}</span>{% if c.admin %}<span class="cmd-tag">管理员</span>{% endif %}</div>
-      {% endfor %}
-    </div>
-    {% endfor %}
-
-    <div class="group">
-      <div class="group-h">&#127899;&#65039; 可选参数（跟在提示词后，均可省略）</div>
-      <div class="pgrid">
-        {% for p in params %}<div class="pi"><span class="pn">{{ p.name }}</span><span class="pd">{{ p.desc }}</span></div>{% endfor %}
-      </div>
-    </div>
-
-    <div class="group">
-      <div class="group-h">&#128221; 示例</div>
-      <div class="ex">{% for e in examples %}<div class="ex-l">{{ e }}</div>{% endfor %}</div>
-    </div>
-
-    <div class="info">{{ wf_line }}<br/>{{ mode_line }}</div>
-  </div>
-
-  <div class="footer">&#128048; Rabbit House ｜ 今天也画点温柔的东西吧。</div>
-</div>
-</body>
-</html>
-"""
-
-CLOUD_PRESET_CARD_TMPL = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 100%; background: transparent; }
-  body {
-    width: 100vw; min-width: 900px;
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-    color: #4e5878;
-  }
-  .card {
-    width: 100%; padding: 34px 36px 28px; overflow: hidden;
-    zoom: {{ scale | default(2) }};
-    background:
-      radial-gradient(circle at 5% 4%, rgba(255,190,219,.48), transparent 27%),
-      radial-gradient(circle at 96% 5%, rgba(172,220,255,.58), transparent 29%),
-      radial-gradient(circle at 92% 96%, rgba(205,190,255,.42), transparent 30%),
-      linear-gradient(145deg, #fff9fc 0%, #f5f6ff 48%, #eff8ff 100%);
-    border: 2px solid rgba(193,195,235,.72);
-  }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-  .brand { display: flex; align-items: center; gap: 15px; }
-  .logo {
-    width: 58px; height: 58px; border-radius: 18px; display: flex;
-    align-items: center; justify-content: center; font-size: 32px;
-    background: linear-gradient(145deg, #7f8eea, #99b9f2);
-    box-shadow: 0 9px 24px rgba(104,121,199,.25);
-  }
-  .title { font-size: 31px; font-weight: 900; color: #6573bd; letter-spacing: .5px; }
-  .subtitle { margin-top: 4px; font-size: 15px; color: #8d96bd; }
-  .badge {
-    padding: 9px 15px; border-radius: 999px; font-size: 14px; font-weight: 800;
-    color: #7d70ac; background: rgba(255,255,255,.72);
-    border: 1px solid rgba(195,180,225,.68);
-  }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 15px; }
-  .preset {
-    min-height: 94px; padding: 16px 18px; border-radius: 19px;
-    background: rgba(255,255,255,.82); border: 1px solid rgba(208,211,237,.82);
-    box-shadow: 0 7px 22px rgba(94,105,158,.09);
-  }
-  .preset-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .name { font-size: 20px; font-weight: 900; color: #6573bd; }
-  .flag {
-    font-family: Consolas, Menlo, monospace; font-size: 13px; font-weight: 800;
-    color: #6d80bd; background: #edf2ff; padding: 5px 9px; border-radius: 9px;
-  }
-  .desc { margin-top: 10px; font-size: 15.5px; font-weight: 700; color: #5f6884; }
-  .size { margin-top: 5px; font-size: 13px; color: #9a86b4; }
-  .usage {
-    margin-top: 18px; padding: 20px 22px; border-radius: 21px;
-    background: rgba(255,255,255,.75); border: 1px solid rgba(208,198,234,.76);
-  }
-  .usage-title { font-size: 18px; font-weight: 900; color: #746bb1; margin-bottom: 11px; }
-  .example {
-    margin-top: 8px; padding: 10px 13px; border-radius: 12px; font-size: 14.5px;
-    font-family: Consolas, "Microsoft YaHei", monospace; color: #56648b;
-    background: #f1f4fc; border-left: 4px solid #92a2df;
-  }
-  .tip { margin-top: 12px; font-size: 14px; line-height: 1.75; color: #7d86a6; }
-  .footer { margin-top: 18px; text-align: center; font-size: 13.5px; color: #9aa3bf; }
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="top">
-      <div class="brand">
-        <div class="logo">🎨</div>
-        <div>
-          <div class="title">云绘图快捷预设</div>
-          <div class="subtitle">一条参数，快速切换成品风格</div>
-        </div>
-      </div>
-      <div class="badge">云端绘图 · 文生图 / 图生图</div>
-    </div>
-    <div class="grid">
-      {% for item in items %}
-      <div class="preset">
-        <div class="preset-top">
-          <span class="name">{{ item.icon }} {{ item.name }}</span>
-          <span class="flag">--{{ item.name }}</span>
-        </div>
-        <div class="desc">{{ item.desc }}</div>
-        <div class="size">推荐尺寸 · {{ item.size }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="usage">
-      <div class="usage-title">✨ 使用示例</div>
-      <div class="example">/云绘图 银发少女，蓝色连衣裙 --手办</div>
-      <div class="example">引用或附带原图 → /变手办</div>
-      <div class="example">回复原图 → /云绘图 --毛绒</div>
-      <div class="tip">
-        附带原图时会自动切换到云端图片编辑，尽量保留人物身份、脸部、服装、姿势与构图；
-        默认沿用第一张原图分辨率，手动填写 --size 时以指定尺寸为准。
-      </div>
-    </div>
-    <div class="footer">Rabbit House · 云端绘图会消耗对应接口额度</div>
-  </div>
-</body>
-</html>
-"""
-
-DAILY_ME_CARD_TMPL = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 100%; background: transparent; }
-  body {
-    width: 100vw;
-    min-width: 900px;
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-    color: #665c83;
-  }
-  .card {
-    width: 100%;
-    padding: 34px;
-    border-radius: 34px;
-    overflow: hidden;
-    background:
-      radial-gradient(circle at 8% 4%, rgba(255,191,218,.52), transparent 25%),
-      radial-gradient(circle at 94% 8%, rgba(178,222,255,.58), transparent 26%),
-      radial-gradient(circle at 90% 94%, rgba(204,189,255,.46), transparent 30%),
-      linear-gradient(145deg, #fff9fc 0%, #f8f4ff 48%, #f0f8ff 100%);
-    border: 2px solid rgba(208,183,235,.75);
-    box-shadow: 0 18px 55px rgba(100,83,140,.18);
-  }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-  .title { font-size: 34px; font-weight: 800; color: #806db0; letter-spacing: 1px; }
-  .date {
-    font-size: 16px; font-weight: 700; color: #9a89bd;
-    padding: 9px 15px; border-radius: 999px;
-    background: rgba(255,255,255,.72); border: 1px solid rgba(190,170,225,.5);
-  }
-  .details {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 13px 16px;
-    margin-bottom: 22px;
-  }
-  .item {
-    min-height: 76px; padding: 14px 17px; border-radius: 18px;
-    background: rgba(255,255,255,.76); border: 1px solid rgba(220,204,238,.72);
-  }
-  .item.wide { grid-column: 1 / -1; }
-  .label { font-size: 14px; font-weight: 800; color: #ac8fc7; margin-bottom: 6px; }
-  .value { font-size: 20px; line-height: 1.45; font-weight: 700; color: #625778; }
-  .preview-wrap {
-    padding: 10px; border-radius: 26px;
-    background: rgba(255,255,255,.86);
-    border: 1px solid rgba(215,194,235,.8);
-    box-shadow: 0 10px 30px rgba(98,77,135,.12);
-  }
-  .preview {
-    display: block; width: 100%; max-height: 620px; object-fit: contain;
-    border-radius: 19px; background: #f6f2fa;
-  }
-  .meta {
-    margin-top: 17px; padding: 13px 16px; border-radius: 15px;
-    text-align: center; font-size: 15px; font-weight: 700; color: #8c7ba8;
-    background: rgba(255,255,255,.62);
-  }
-  .footer {
-    margin-top: 15px; text-align: center; font-size: 15px; color: #a392bb;
-  }
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="top">
-      <div class="title">✨ 今日的二次元的你</div>
-      <div class="date">{{ date }}</div>
-    </div>
-    <div class="details">
-      {% for item in items %}
-      <div class="item{% if item.wide %} wide{% endif %}">
-        <div class="label">{{ item.label }}</div>
-        <div class="value">{{ item.value }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="preview-wrap">
-      <img class="preview" src="{{ preview_data_uri }}"/>
-    </div>
-    <div class="meta">{{ meta }}</div>
-    <div class="footer">{{ footer }}</div>
-  </div>
-</body>
-</html>
-"""
+from . import presets
+from .templates import (
+    CLOUD_PRESET_CARD_TMPL,
+    DAILY_ME_CARD_TMPL,
+    DEFAULT_WORKFLOW,
+    DRAW_HELP_TMPL,
+)
 
 
 class ComfyUIError(Exception):
@@ -367,388 +31,14 @@ class ComfyUIError(Exception):
 
 
 class ComfyUIDrawPlugin(Star):
-    # 指令行内参数别名 -> 内部 key
-    FLAG_ALIASES = {
-        "--neg": "negative", "--no": "negative", "-n": "negative", "--negative": "negative",
-        "--size": "size", "-s": "size", "--wh": "size",
-        "--steps": "steps", "--step": "steps",
-        "--cfg": "cfg",
-        "--seed": "seed",
-        "--batch": "batch", "-b": "batch", "--count": "batch",
-        "--wf": "workflow", "-w": "workflow", "--workflow": "workflow",
-        "--lora": "lora", "-l": "lora", "--lo": "lora",
-        "--quality": "quality", "-q": "quality",
-        "--style": "style",
-        "--preset": "preset", "--预设": "preset",
-        "--fw": "forward", "--forward": "forward", "--转发": "forward",
-    }
-    SIZE_PRESETS = {
-        "--横图": "1216x832",
-        "--landscape": "1216x832",
-        "--竖图": "832x1216",
-        "--portrait": "832x1216",
-        "--方图": "1024x1024",
-        "--square": "1024x1024",
-        "--宽图": "1344x768",
-        "--宽屏": "1344x768",
-        "--wide": "1344x768",
-    }
-    CLOUD_SIZE_PRESETS = {
-        "--横图": "1536x1024",
-        "--landscape": "1536x1024",
-        "--竖图": "1024x1536",
-        "--portrait": "1024x1536",
-        "--方图": "1024x1024",
-        "--square": "1024x1024",
-        "--宽图": "1536x1024",
-        "--宽屏": "1536x1024",
-        "--wide": "1536x1024",
-    }
-    CLOUD_PROMPT_PRESETS = {
-        "手办": {
-            "size": "1024x1024",
-            "desc": "收藏级 PVC 手办产品照",
-            "prompt": (
-                "Turn the described subject into a premium 1/7-scale PVC collectible "
-                "figure. Preserve the subject's recognizable appearance, hairstyle, "
-                "clothing, colors, accessories, and personality. Show the complete "
-                "manufactured figurine standing on a tasteful display base, with realistic "
-                "painted plastic and resin materials, fine sculpted details, professional "
-                "studio product photography, softbox lighting, shallow depth of field, and "
-                "an elegant collector-box backdrop. Make it clearly a physical figurine, "
-                "not a real person. No watermark, logo, signature, or extra text. Subject: {subject}"
-            ),
-        },
-        "黏土": {
-            "size": "1024x1024",
-            "desc": "可爱 Q 版黏土人",
-            "prompt": (
-                "Reimagine the described subject as a cute handmade chibi polymer-clay "
-                "figurine. Preserve the key identity, colors, outfit, and accessories; use "
-                "a large expressive head, small body, visible handcrafted clay texture, "
-                "rounded forms, miniature diorama base, warm tabletop lighting, and crisp "
-                "macro photography. No watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "毛绒": {
-            "size": "1024x1024",
-            "desc": "柔软可爱的毛绒玩偶",
-            "prompt": (
-                "Transform the described subject into an adorable premium plush toy. "
-                "Preserve recognizable colors, hairstyle, clothing motifs, and accessories; "
-                "use soft short-pile fabric, embroidered facial features, neat stitching, "
-                "rounded huggable proportions, cozy product photography, warm diffused "
-                "lighting, and a clean background. No watermark, logo, signature, or text. "
-                "Subject: {subject}"
-            ),
-        },
-        "头像": {
-            "size": "1024x1024",
-            "desc": "精致社交头像",
-            "prompt": (
-                "Create a polished square profile avatar of the described subject. Use a "
-                "centered head-and-shoulders composition, a clear expressive face, flattering "
-                "soft lighting, refined detail, harmonious colors, a simple layered background, "
-                "and strong readability at small size. No frame, watermark, logo, signature, "
-                "or text. Subject: {subject}"
-            ),
-        },
-        "海报": {
-            "size": "1024x1536",
-            "desc": "竖版电影感宣传海报",
-            "prompt": (
-                "Design a premium vertical cinematic promotional poster featuring the "
-                "described subject. Use a striking focal composition, dramatic lighting, "
-                "layered depth, atmospheric background elements, strong color grading, and "
-                "clean intentional negative space for an optional title. Do not invent words; "
-                "include no watermark, logo, signature, or text unless the subject description "
-                "explicitly requests exact wording. Subject: {subject}"
-            ),
-        },
-        "壁纸": {
-            "size": "1536x1024",
-            "desc": "横版电影感桌面壁纸",
-            "prompt": (
-                "Create a cinematic widescreen desktop wallpaper of the described subject. "
-                "Use a spacious landscape composition, place the main subject slightly off "
-                "center, add rich environmental storytelling, layered depth, detailed lighting, "
-                "and balanced areas that remain visually calm behind desktop icons. No border, "
-                "watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "贴纸": {
-            "size": "1024x1024",
-            "desc": "粗描边模切贴纸",
-            "prompt": (
-                "Turn the described subject into a cute die-cut sticker illustration. Use a "
-                "bold clean silhouette, expressive simplified details, saturated harmonious "
-                "colors, thick white sticker border, subtle print texture, and a plain clean "
-                "background with no unrelated objects. No watermark, logo, signature, or text. "
-                "Subject: {subject}"
-            ),
-        },
-        "像素": {
-            "size": "1024x1024",
-            "desc": "精细复古像素画",
-            "prompt": (
-                "Recreate the described subject as carefully authored high-detail pixel art. "
-                "Use a deliberate limited palette, crisp pixel clusters, readable silhouette, "
-                "subtle dithering, game-art lighting, and a coherent pixel-art background. "
-                "Keep every edge pixel-sharp with no smooth vector lines. No watermark, logo, "
-                "signature, or text. Subject: {subject}"
-            ),
-        },
-        "盲盒": {
-            "size": "1024x1024",
-            "desc": "高级设计师盲盒玩具",
-            "prompt": (
-                "Transform the described subject into a premium designer blind-box art toy. "
-                "Preserve the subject's signature hairstyle, colors, outfit motifs, and "
-                "accessories; use charming stylized proportions, a large expressive head, "
-                "compact body, smooth high-quality vinyl, subtle painted details, a small "
-                "collector display base, soft studio lighting, and tasteful unbranded display "
-                "packaging in the background. Make it clearly a physical designer toy. No "
-                "watermark, logo, signature, brand name, or readable text. Subject: {subject}"
-            ),
-        },
-        "水彩": {
-            "size": "1024x1536",
-            "desc": "通透柔和水彩绘本",
-            "prompt": (
-                "Reimagine the described subject as a luminous hand-painted watercolor "
-                "storybook illustration. Preserve all recognizable features, clothing colors, "
-                "pose, and important scene elements; use delicate pigment blooms, transparent "
-                "layering, soft wet-on-wet edges, selective crisp details, textured cotton "
-                "paper, gentle natural light, and an elegant harmonious palette. Avoid muddy "
-                "colors and empty unfinished areas. No watermark, logo, signature, or text. "
-                "Subject: {subject}"
-            ),
-        },
-        "赛博": {
-            "size": "1024x1536",
-            "desc": "电影级赛博霓虹夜景",
-            "prompt": (
-                "Create a cinematic cyberpunk neon interpretation of the described subject. "
-                "Preserve the subject's identity, silhouette, hairstyle, clothing design, and "
-                "pose while adding sophisticated futuristic materials, layered city depth, "
-                "rain-slick reflections, cyan and magenta practical lights, volumetric haze, "
-                "dramatic rim lighting, and premium film color grading. Keep the face clear and "
-                "natural rather than oversaturated. No watermark, logo, signature, or text. "
-                "Subject: {subject}"
-            ),
-        },
-        "国风": {
-            "size": "1024x1536",
-            "desc": "雅致新中式工笔水墨",
-            "prompt": (
-                "Render the described subject as an elegant contemporary Chinese ink-and-color "
-                "illustration combining refined gongbi linework with expressive ink washes. "
-                "Preserve the subject's recognizable face, hairstyle, outfit colors, pose, and "
-                "core composition; use flowing fabric details, restrained mineral pigments, "
-                "subtle gold accents, poetic mist, layered mountains or botanical motifs where "
-                "appropriate, generous intentional negative space, and fine rice-paper texture. "
-                "No calligraphy, seal, watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "漫画": {
-            "size": "1024x1536",
-            "desc": "高对比复古漫画封面",
-            "prompt": (
-                "Turn the described subject into a polished retro comic-book cover illustration. "
-                "Preserve recognizable facial features, hairstyle, clothing, pose, and key scene "
-                "elements; use confident ink contours, dynamic perspective, expressive motion, "
-                "controlled halftone shading, selective saturated colors, dramatic shadows, and "
-                "clean print texture. Compose it like a premium cover but include no title, speech "
-                "bubble, watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "油画": {
-            "size": "1024x1536",
-            "desc": "博物馆质感古典油画",
-            "prompt": (
-                "Paint the described subject as a museum-quality classical oil painting. Preserve "
-                "the subject's identity, expression, hairstyle, clothing colors, pose, and major "
-                "background forms; use masterful anatomy, layered glazing, subtle impasto, rich "
-                "pigment depth, elegant chiaroscuro, soft atmospheric transitions, tactile canvas "
-                "texture, and a timeless balanced composition. Keep details refined and faces "
-                "natural. No frame, watermark, logo, signature, or text. Subject: {subject}"
-            ),
-        },
-        "手机UI": {
-            "size": "1024x1536",
-            "desc": "高保真手机 App 界面",
-            "prompt": (
-                "Design a production-ready high-fidelity mobile app UI for the described product "
-                "or scenario. Show one complete vertical application screen directly, not a phone "
-                "mockup and not a hand holding a device. Use a clear information hierarchy, an "
-                "8-point spacing system, safe-area aware top and bottom navigation, consistent "
-                "components, polished icons, accessible contrast, restrained shadows, and a "
-                "coherent modern color system. Include concise, correctly spelled, readable UI "
-                "labels appropriate to the request; avoid filler text and visual clutter. No "
-                "watermark, unrelated logo, presentation board, or device frame. Product brief: {subject}"
-            ),
-        },
-        "网页UI": {
-            "size": "1536x1024",
-            "desc": "现代响应式网页界面",
-            "prompt": (
-                "Create a polished production-ready desktop web UI for the described website. "
-                "Show the webpage itself at a wide desktop viewport with a purposeful navigation "
-                "bar, strong hero or primary workspace, clear content sections, reusable cards, "
-                "well-designed controls, and a convincing footer or lower content area when "
-                "appropriate. Use a disciplined grid, generous spacing, clear typography, "
-                "accessible contrast, subtle depth, and a cohesive design system. Render concise "
-                "readable labels instead of gibberish. No browser chrome, laptop mockup, watermark, "
-                "unrelated logo, or presentation board. Website brief: {subject}"
-            ),
-        },
-        "后台UI": {
-            "size": "1536x1024",
-            "desc": "专业 SaaS 后台仪表盘",
-            "prompt": (
-                "Design a professional high-fidelity SaaS admin dashboard for the described system. "
-                "Show a complete desktop interface with a compact sidebar, useful top navigation, "
-                "clear page title and filters, KPI summary cards, meaningful charts, a readable data "
-                "table, status badges, and practical actions. Use a precise grid, consistent spacing, "
-                "accessible colors, restrained shadows, strong data hierarchy, and realistic concise "
-                "labels and values. Avoid decorative clutter, tiny unreadable text, fake paragraphs, "
-                "browser chrome, device mockups, watermarks, and unrelated logos. System brief: {subject}"
-            ),
-        },
-        "数据大屏": {
-            "size": "1536x1024",
-            "desc": "科技感数据可视化大屏",
-            "prompt": (
-                "Create a premium command-center data visualization screen for the described topic. "
-                "Use a wide dark interface with a strong central overview, clearly grouped KPI cards, "
-                "legible trend charts, maps or topology only when relevant, ranked lists, alerts, and "
-                "balanced negative space. Apply a sophisticated restrained luminous palette, crisp "
-                "thin-line components, high information density without clutter, and readable concise "
-                "labels and numbers. Keep every panel aligned to a coherent grid. No perspective room "
-                "mockup, wall display frame, watermark, unrelated logo, or meaningless microtext. "
-                "Dashboard brief: {subject}"
-            ),
-        },
-        "电商UI": {
-            "size": "1024x1536",
-            "desc": "精致移动电商购物界面",
-            "prompt": (
-                "Design a refined high-conversion mobile e-commerce UI for the described store or "
-                "product. Show one complete vertical app screen directly with clear search and "
-                "navigation, premium product imagery, concise product information, price and promotion "
-                "hierarchy, trustworthy ratings or service benefits, variant controls where relevant, "
-                "and an obvious but tasteful purchase action. Use a consistent design system, clean "
-                "spacing, readable labels, accessible contrast, and polished commerce components. No "
-                "phone frame, hand, presentation board, watermark, unrelated logo, or gibberish text. "
-                "Commerce brief: {subject}"
-            ),
-        },
-        "游戏UI": {
-            "size": "1536x1024",
-            "desc": "沉浸式游戏菜单与 HUD",
-            "prompt": (
-                "Create a high-fidelity game UI for the described game world and feature. Show the "
-                "actual widescreen interface, such as a main menu, inventory, character screen, or "
-                "in-game HUD according to the request. Preserve strong environmental art while keeping "
-                "all controls, status bars, item slots, navigation, and hierarchy immediately usable. "
-                "Use genre-appropriate materials and ornament, consistent iconography, readable concise "
-                "labels, clear focus states, and excellent contrast. Avoid excessive decoration over "
-                "content, tiny text, device mockups, watermark, unrelated logos, and presentation boards. "
-                "Game UI brief: {subject}"
-            ),
-        },
-        "周边目录": {
-            "size": "1536x1536",
-            "desc": "二次元官方周边贩售图鉴",
-            "prompt": (
-                "Design a polished square Japanese-anime merchandise catalog and official goods "
-                "sales sheet for the described original character or event. Use a large character "
-                "hero illustration and decorative event title across the top, plus a compact purchase "
-                "bonus panel. Below it, build a precise numbered product grid with two rows and five "
-                "columns, showing convincing isolated mockups such as an acrylic stand, badge set, "
-                "illustration towel, T-shirt, scarf towel, tote bag, acrylic keychain, wristband, "
-                "sticker set, and penlight. Give every product a short readable name and clearly "
-                "formatted price. Add tasteful purchase notes and generic payment information in the "
-                "footer. Keep the same character identity, costume, logo motif, pastel color system, "
-                "lace and star decorations throughout all merchandise. Use the language explicitly "
-                "requested in the brief; otherwise use concise readable Chinese. Make the layout "
-                "dense but orderly, print-ready, cute, and commercially credible. Do not copy a real "
-                "brand, payment logo, or copyrighted event name; no watermark or gibberish microtext. "
-                "Catalog brief: {subject}"
-            ),
-        },
-        "联动菜单": {
-            "size": "1536x1536",
-            "desc": "二次元主题咖啡联动菜单",
-            "prompt": (
-                "Design a premium square anime collaboration cafe menu for the described original "
-                "character, theme, or event. Feature the character and event title in a charming hero "
-                "banner, then organize signature drinks, desserts, meals, and set menus into a clean "
-                "numbered grid with appetizing product photography or illustrations, short readable "
-                "names, ingredients, and clearly formatted prices. Include a compact bonus-gift panel "
-                "for coasters or cards, allergy and ordering notes, and a tasteful footer. Maintain a "
-                "coherent pastel visual identity across character art, food styling, icons, borders, "
-                "and decorative motifs. Use the requested language, otherwise concise readable Chinese. "
-                "Keep the page dense but easy to scan, print-ready, cute, and commercially convincing. "
-                "Do not use real cafe brands, payment logos, copyrighted event names, watermarks, or "
-                "gibberish microtext. Menu brief: {subject}"
-            ),
-        },
-    }
-    CLOUD_PROMPT_PRESET_ALIASES = {
-        "变手办": "手办", "figure": "手办", "figurine": "手办",
-        "粘土": "黏土", "clay": "黏土",
-        "玩偶": "毛绒", "plush": "毛绒",
-        "avatar": "头像", "poster": "海报", "wallpaper": "壁纸",
-        "sticker": "贴纸", "pixel": "像素", "pixelart": "像素",
-        "潮玩": "盲盒", "blindbox": "盲盒", "toy": "盲盒",
-        "watercolor": "水彩",
-        "霓虹": "赛博", "cyber": "赛博", "cyberpunk": "赛博",
-        "水墨": "国风", "工笔": "国风", "ink": "国风",
-        "复古漫画": "漫画", "comic": "漫画", "manga": "漫画",
-        "oil": "油画", "oilpainting": "油画",
-        "手机ui": "手机UI", "appui": "手机UI", "移动ui": "手机UI", "移动端ui": "手机UI",
-        "网页ui": "网页UI", "webui": "网页UI", "网页设计": "网页UI", "website": "网页UI",
-        "后台ui": "后台UI", "dashboard": "后台UI", "仪表盘": "后台UI", "adminui": "后台UI",
-        "大屏": "数据大屏", "dataviz": "数据大屏", "commandcenter": "数据大屏",
-        "电商ui": "电商UI", "商城ui": "电商UI", "shopui": "电商UI", "ecommerce": "电商UI",
-        "游戏ui": "游戏UI", "gameui": "游戏UI", "hud": "游戏UI",
-        "周边ui": "周边目录", "商品目录": "周边目录", "谷子海报": "周边目录",
-        "goods": "周边目录", "merch": "周边目录", "merchandise": "周边目录",
-        "联动ui": "联动菜单", "菜单ui": "联动菜单", "咖啡菜单": "联动菜单",
-        "cafeui": "联动菜单", "collabmenu": "联动菜单",
-    }
-    CLOUD_PROMPT_PRESET_FLAGS = {
-        "--手办": "手办", "--变手办": "手办", "--figure": "手办",
-        "--黏土": "黏土", "--粘土": "黏土", "--clay": "黏土",
-        "--毛绒": "毛绒", "--玩偶": "毛绒", "--plush": "毛绒",
-        "--头像": "头像", "--avatar": "头像",
-        "--海报": "海报", "--poster": "海报",
-        "--壁纸": "壁纸", "--wallpaper": "壁纸",
-        "--贴纸": "贴纸", "--sticker": "贴纸",
-        "--像素": "像素", "--pixel": "像素",
-        "--盲盒": "盲盒", "--潮玩": "盲盒", "--blindbox": "盲盒",
-        "--水彩": "水彩", "--watercolor": "水彩",
-        "--赛博": "赛博", "--霓虹": "赛博", "--cyber": "赛博", "--cyberpunk": "赛博",
-        "--国风": "国风", "--水墨": "国风", "--工笔": "国风", "--ink": "国风",
-        "--漫画": "漫画", "--复古漫画": "漫画", "--comic": "漫画",
-        "--油画": "油画", "--oil": "油画", "--oilpainting": "油画",
-        "--手机ui": "手机UI", "--移动ui": "手机UI", "--appui": "手机UI",
-        "--网页ui": "网页UI", "--网页设计": "网页UI", "--webui": "网页UI",
-        "--后台ui": "后台UI", "--仪表盘": "后台UI", "--dashboard": "后台UI",
-        "--数据大屏": "数据大屏", "--大屏": "数据大屏", "--dataviz": "数据大屏",
-        "--电商ui": "电商UI", "--商城ui": "电商UI", "--shopui": "电商UI",
-        "--游戏ui": "游戏UI", "--gameui": "游戏UI", "--hud": "游戏UI",
-        "--周边目录": "周边目录", "--周边ui": "周边目录", "--商品目录": "周边目录",
-        "--谷子海报": "周边目录", "--goods": "周边目录", "--merch": "周边目录",
-        "--联动菜单": "联动菜单", "--联动ui": "联动菜单", "--菜单ui": "联动菜单",
-        "--咖啡菜单": "联动菜单", "--cafeui": "联动菜单", "--collabmenu": "联动菜单",
-    }
-    DAILY_ME_NEGATIVE_PROMPT = (
-        "worst quality, low quality, lowres, blurry, jpeg artifacts, malformed hands, "
-        "extra fingers, missing fingers, text, watermark, logo, signature, artist name, "
-        "username, copyright notice, website address, QR code, subtitles"
-    )
+    # 预设数据见 presets.py，这里保留同名类属性以兼容原有调用。
+    FLAG_ALIASES = presets.FLAG_ALIASES
+    SIZE_PRESETS = presets.SIZE_PRESETS
+    CLOUD_SIZE_PRESETS = presets.CLOUD_SIZE_PRESETS
+    CLOUD_PROMPT_PRESETS = presets.CLOUD_PROMPT_PRESETS
+    CLOUD_PROMPT_PRESET_ALIASES = presets.CLOUD_PROMPT_PRESET_ALIASES
+    CLOUD_PROMPT_PRESET_FLAGS = presets.CLOUD_PROMPT_PRESET_FLAGS
+    DAILY_ME_NEGATIVE_PROMPT = presets.DAILY_ME_NEGATIVE_PROMPT
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -971,14 +261,9 @@ class ComfyUIDrawPlugin(Star):
         progress_message_id = None
         if self.config.get("show_progress", True):
             progress_text = "🎨 正在生成（" + self._fmt_parts(effective) + "）..."
-            if self.config.get("auto_recall_progress", True):
-                progress_message_id, progress_sent = await self._send_progress_message(
-                    event, progress_text
-                )
-                if not progress_sent:
-                    yield event.plain_result(progress_text)
-            else:
-                yield event.plain_result(progress_text)
+            progress_message_id, fallback = await self._start_progress(event, progress_text)
+            if fallback is not None:
+                yield fallback
 
         results = []
         generation_error = None
@@ -999,6 +284,42 @@ class ComfyUIDrawPlugin(Star):
             yield event.plain_result(generation_error)
             return
 
+        chain = await self._build_result_chain(
+            event,
+            results,
+            effective,
+            card_label=display_wf,
+            info_suffix=f"工作流={display_wf}",
+            caption_prefix=caption_prefix,
+            daily_card=daily_card,
+            reply_to_source=reply_to_source,
+            on_success=on_success,
+        )
+        yield event.chain_result(self._maybe_forward(event, chain, opts))
+
+    async def _start_progress(self, event, text):
+        """发送进度提示，返回 (可撤回的消息 ID, 需要由调用方 yield 的普通消息或 None)。"""
+        if self.config.get("auto_recall_progress", True):
+            message_id, sent = await self._send_progress_message(event, text)
+            if sent:
+                return message_id, None
+        return None, event.plain_result(text)
+
+    async def _build_result_chain(
+        self,
+        event,
+        results,
+        effective,
+        *,
+        card_label,
+        info_suffix,
+        caption_prefix="",
+        daily_card=False,
+        reply_to_source=False,
+        on_success=None,
+        show_info=True,
+    ):
+        """本地与云端共用：组装引用、资料卡/说明文字、生成结果和参数回显。"""
         chain = []
         if reply_to_source:
             reply = self._source_reply_component(event)
@@ -1008,11 +329,7 @@ class ComfyUIDrawPlugin(Star):
         card_rendered = False
         if daily_card and caption_prefix and results:
             card_path = await self._render_daily_me_card(
-                caption_prefix,
-                effective,
-                display_wf,
-                results[0][0],
-                results[0][1],
+                caption_prefix, effective, card_label, results[0][0], results[0][1]
             )
             if card_path:
                 chain.append(self._rendered_image_component(card_path))
@@ -1025,11 +342,11 @@ class ComfyUIDrawPlugin(Star):
                 on_success()
             except Exception:  # noqa: BLE001
                 pass
-        if self.config.get("send_seed_info", True) and not card_rendered:
-            info = "✅ " + self._fmt_parts(effective) + f" · 工作流={display_wf}"
+        if show_info and self.config.get("send_seed_info", True) and not card_rendered:
+            info = "✅ " + self._fmt_parts(effective) + f" · {info_suffix}"
             # 前置零宽空格，避免 OneBot 适配器 strip 掉内容
             chain.append(Comp.Plain("\u200b" + info))
-        yield event.chain_result(self._maybe_forward(event, chain, opts))
+        return chain
 
     @staticmethod
     def _source_reply_component(event):
@@ -1359,6 +676,7 @@ class ComfyUIDrawPlugin(Star):
             fil = str(getattr(comp, "file", "") or "")
             data = None
             try:
+                local_path = self._local_image_path(comp)
                 if fil.startswith("base64://"):
                     encoded = fil[len("base64://"):]
                     if len(encoded) > (max_bytes * 4 // 3) + 16:
@@ -1368,10 +686,10 @@ class ComfyUIDrawPlugin(Star):
                     data = await self._fetch_url_bytes(url)
                 elif fil.startswith("http"):
                     data = await self._fetch_url_bytes(fil)
-                elif fil and os.path.exists(fil):
-                    if os.path.getsize(fil) > max_bytes:
+                elif local_path:
+                    if os.path.getsize(local_path) > max_bytes:
                         raise ComfyUIError("输入图片超过体积上限。")
-                    with open(fil, "rb") as f:
+                    with open(local_path, "rb") as f:
                         data = f.read()
                 if data and len(data) > max_bytes:
                     raise ComfyUIError("输入图片超过体积上限。")
@@ -1384,6 +702,24 @@ class ComfyUIDrawPlugin(Star):
             if len(out) >= limit:
                 break
         return out
+
+    @staticmethod
+    def _local_image_path(comp):
+        """返回图片组件指向的本地文件；兼容 AstrBot fromFileSystem 生成的 file:/// 地址。"""
+        for value in (getattr(comp, "path", None), getattr(comp, "file", None)):
+            candidate = str(value or "").strip()
+            if not candidate or candidate.startswith(("http://", "https://", "base64://")):
+                continue
+            if candidate.startswith("file:///"):
+                candidate = candidate[len("file:///"):]
+                # POSIX 上 file:/// 后面紧跟的是相对写法，需要补回根目录。
+                if os.name != "nt" and not candidate.startswith("/"):
+                    candidate = "/" + candidate
+            elif candidate.startswith("file://"):
+                candidate = candidate[len("file://"):]
+            if os.path.isfile(candidate):
+                return candidate
+        return None
 
     def _iter_message_components(self, components):
         """按消息顺序展开组件，同时递归读取 Reply 等组件内保存的引用消息链。"""
@@ -1593,15 +929,6 @@ class ComfyUIDrawPlugin(Star):
         if self._daily_me.get("date") != today:
             self._daily_me = {"date": today, "used": {}}
 
-    def _daily_me_used(self, uid):
-        self._daily_me_roll_date()
-        return str(uid) in self._daily_me["used"]
-
-    def _daily_me_mark(self, uid):
-        self._daily_me_roll_date()
-        self._daily_me["used"][str(uid)] = 1
-        self._daily_me_save()
-
     async def _daily_me_reserve(self, uid):
         """原子检查每日限次并预占；并发请求只能有一个成功。"""
         uid = str(uid)
@@ -1636,88 +963,11 @@ class ComfyUIDrawPlugin(Star):
         """按 用户ID+日期 生成当天稳定的二次元少女形象。返回 (英文提示词, 中文描述)。"""
         today = time.strftime("%Y-%m-%d")
         rnd = random.Random(f"dailyme:{uid}:{today}")
-        hair_colors = [
-            ("silver hair", "银发"), ("black hair", "黑发"),
-            ("chestnut brown hair", "栗棕发"), ("golden blonde hair", "金发"),
-            ("soft pink hair", "柔粉发"), ("deep blue hair", "深蓝发"),
-            ("crimson red hair", "绯红发"), ("purple hair", "紫发"),
-            ("emerald green hair", "翠绿发"), ("orange hair", "橙发"),
-            ("white hair", "白发"), ("light blue hair", "浅蓝发"),
-            ("lavender hair", "薰衣草发"), ("mint green hair", "薄荷绿发"),
-            ("pink gradient hair", "粉色渐变发"),
-            ("blue-to-purple gradient hair", "蓝紫渐变发"),
-            ("black hair with red highlights", "黑发红挑染"),
-            ("black-to-silver ombre hair", "黑银渐变发"),
-        ]
-        hair_styles = [
-            ("long straight hair", "长直发"), ("short bob cut", "短波波头"),
-            ("high twintails", "高双马尾"), ("high ponytail", "高马尾"),
-            ("side ponytail", "侧马尾"), ("loose side braid", "侧麻花辫"),
-            ("long wavy hair", "长卷发"), ("fluffy short hair", "蓬松短发"),
-            ("double hair buns", "双丸子头"), ("soft drill curls", "柔软公主卷"),
-            ("hime cut", "姬发式"), ("low twintails", "低双马尾"),
-            ("half-up hairstyle", "半扎发"), ("short hair, ahoge", "短发呆毛"),
-        ]
-        eyes = [
-            ("ruby red eyes", "红"), ("sapphire blue eyes", "蓝"),
-            ("golden eyes", "金"), ("emerald green eyes", "绿"),
-            ("amethyst purple eyes", "紫"), ("subtle heterochromia", "异色"),
-            ("aqua eyes", "水蓝"), ("rose pink eyes", "粉"),
-            ("amber eyes", "琥珀"), ("silver grey eyes", "银灰"),
-            ("teal eyes", "青绿"),
-        ]
-        expressions = [
-            ("gentle smile", "温柔微笑"), ("bright cheerful smile", "元气笑容"),
-            ("calm expression", "清冷沉静"), ("shy smile, light blush", "害羞浅笑"),
-            ("confident smile", "自信微笑"), ("sleepy soft gaze", "慵懒睡眼"),
-            ("curious expression", "好奇神情"), ("small playful pout", "俏皮轻嘟嘴"),
-            ("laughing, closed eyes", "闭眼欢笑"), ("playful grin", "灵动坏笑"),
-            ("soft wink", "俏皮眨眼"), ("serene expression", "安静治愈"),
-        ]
-        # 服装、配饰、场景和光线采用协调套装，避免完全随机产生割裂组合。
-        themes = [
-            ("校园晨光", "海军蓝制服与红色发带", "在靠窗教室抱着笔记本",
-             "navy school blazer, pleated skirt, red hair ribbon, holding a notebook, classroom by the window, soft morning sunlight"),
-            ("午后咖啡", "奶油色针织衫与贝雷帽", "在咖啡馆捧着热饮",
-             "cream knit sweater, plaid skirt, beret, holding a warm drink, cozy cafe interior, warm window light"),
-            ("神社初愿", "红白巫女服与花朵发饰", "站在鸟居前拿着御守",
-             "red and white miko outfit, flower hair ornament, holding an omamori charm, Shinto shrine, torii gate, dappled sunlight"),
-            ("夏夜祭典", "花纹浴衣与狐狸面具", "在灯笼下拿着团扇",
-             "floral yukata, obi, fox mask worn on side of head, holding a folding fan, summer festival, glowing lanterns, warm night lighting"),
-            ("霓虹夜行", "黑色短外套与挂脖耳机", "漫步在雨后的霓虹街道",
-             "black cropped jacket, casual streetwear, headphones around neck, neon city street after rain, colorful reflections, cinematic rim light"),
-            ("海风黄昏", "白色夏日连衣裙与草帽", "站在落日海边迎着微风",
-             "flowing white summer dress, straw hat, seaside at sunset, gentle ocean breeze, golden hour backlight"),
-            ("静谧书页", "学院风开衫与圆框眼镜", "在图书馆翻阅一本书",
-             "academy cardigan, ribbon tie, round glasses, reading an open book, quiet library, soft ambient light"),
-            ("星空天台", "深蓝连帽衫与星星发夹", "在天台仰望星空",
-             "navy hoodie, star hairpin, rooftop under a starry sky, looking up at the stars, moonlight, subtle city bokeh"),
-            ("冬日暖意", "高领毛衣、呢大衣与围巾", "站在飘雪的小镇街角",
-             "turtleneck sweater, wool coat, warm scarf, snowy town street, gentle snowfall, warm shop lights"),
-            ("玻璃花房", "薄荷色连衣裙与蝴蝶发饰", "在温室花草间轻触花瓣",
-             "mint green dress, butterfly hair ornament, touching flower petals, botanical greenhouse, sunbeams through glass, lush plants"),
-            ("深海蓝境", "水手领连衣裙与珍珠发夹", "在水族馆玻璃前看游鱼",
-             "sailor-collar dress, pearl hairpin, standing before a large aquarium window, glowing fish, blue caustic light"),
-            ("月夜魔法", "精致魔女裙与宽檐魔女帽", "在月光花园捧着魔法光球",
-             "elegant witch dress, wide-brimmed witch hat, holding a glowing magic orb, moonlit fantasy garden, floating light particles"),
-            ("闪耀舞台", "星光偶像服与小皇冠发饰", "在舞台灯光下挥手",
-             "sparkling idol costume, small crown hair ornament, waving on stage, colorful spotlights, glittering confetti"),
-            ("灯火长街", "改良旗袍与流苏发簪", "走在红灯笼点亮的古街",
-             "elegant modern qipao, tassel hairpin, walking along an old street with red lanterns, warm cinematic lighting"),
-            ("枫色物语", "棕色针织开衫与格纹围巾", "坐在铺满枫叶的公园长椅",
-             "brown knit cardigan, plaid scarf, sitting on a park bench, autumn maple leaves, soft golden light"),
-            ("雨声漫步", "浅色风衣与透明雨伞", "走过细雨中的街道",
-             "light trench coat, holding a transparent umbrella, rainy street, soft reflections, diffused overcast light"),
-            ("深夜便利店", "宽松连帽衫与斜挎小包", "站在便利店灯牌旁喝汽水",
-             "oversized hoodie, small crossbody bag, holding a soda bottle, convenience store at night, fluorescent glow, urban bokeh"),
-            ("蔷薇庭院", "哥特洛丽塔裙与黑色颈带", "站在盛开的蔷薇拱门下",
-             "gothic lolita dress, black choker, rose garden archway, drifting petals, dramatic soft light"),
-        ]
-        hc = rnd.choice(hair_colors)
-        hs = rnd.choice(hair_styles)
-        ey = rnd.choice(eyes)
-        ex = rnd.choice(expressions)
-        theme = rnd.choice(themes)
+        hc = rnd.choice(presets.DAILY_ME_HAIR_COLORS)
+        hs = rnd.choice(presets.DAILY_ME_HAIR_STYLES)
+        ey = rnd.choice(presets.DAILY_ME_EYES)
+        ex = rnd.choice(presets.DAILY_ME_EXPRESSIONS)
+        theme = rnd.choice(presets.DAILY_ME_THEMES)
         prompt = (
             f"1girl, solo, {hc[0]}, {hs[0]}, {ey[0]}, {ex[0]}, {theme[3]}, "
             "looking at viewer, three-quarter view, upper body, coherent outfit, "
@@ -2182,19 +1432,10 @@ class ComfyUIDrawPlugin(Star):
 
     async def _render_cloud_preset_card(self):
         """渲染云绘图预设图片卡片；失败返回 None。"""
-        icons = {
-            "手办": "🏆", "黏土": "🧸", "毛绒": "🐰", "头像": "👤",
-            "海报": "🎬", "壁纸": "🌌", "贴纸": "✨", "像素": "👾",
-            "盲盒": "🎁", "水彩": "🖌️", "赛博": "🌃", "国风": "🏮",
-            "漫画": "💥", "油画": "🖼️",
-            "手机UI": "📱", "网页UI": "🖥️", "后台UI": "📊",
-            "数据大屏": "🌐", "电商UI": "🛍️", "游戏UI": "🎮",
-            "周边目录": "🎀", "联动菜单": "🍰",
-        }
         items = [
             {
                 "name": name,
-                "icon": icons.get(name, "🎨"),
+                "icon": presets.CLOUD_PRESET_ICONS.get(name, "🎨"),
                 "desc": item["desc"],
                 "size": item["size"],
             }
@@ -2325,14 +1566,9 @@ class ComfyUIDrawPlugin(Star):
             action = "编辑原图" if source_images else "生成"
             backend_label = "Antigravity/Gemini" if is_antigravity else "GPT-Image"
             progress_text = f"🎨 正在用云端 {backend_label} {action}（" + " · ".join(parts) + "）..."
-            if self.config.get("auto_recall_progress", True):
-                progress_message_id, progress_sent = await self._send_progress_message(
-                    event, progress_text
-                )
-                if not progress_sent:
-                    yield event.plain_result(progress_text)
-            else:
-                yield event.plain_result(progress_text)
+            progress_message_id, fallback = await self._start_progress(event, progress_text)
+            if fallback is not None:
+                yield fallback
 
         results = []
         generation_error = None
@@ -2374,36 +1610,20 @@ class ComfyUIDrawPlugin(Star):
                 effective["width"] = int(width)
                 effective["height"] = int(height)
 
-        chain = []
-        if reply_to_source:
-            reply = self._source_reply_component(event)
-            if reply is not None:
-                chain.append(reply)
-
-        card_rendered = False
         model = self._cloud_image_model()
-        if daily_card and caption_prefix and results:
-            card_path = await self._render_daily_me_card(
-                caption_prefix,
-                effective,
-                f"云端·{model}",
-                results[0][0],
-                results[0][1],
-            )
-            if card_path:
-                chain.append(self._rendered_image_component(card_path))
-                card_rendered = True
-        if caption_prefix and not card_rendered:
-            chain.append(Comp.Plain(str(caption_prefix).strip()))
-        chain.extend(self._media_component(data, filename) for data, filename in results)
-        if on_success:
-            try:
-                on_success()
-            except Exception:  # noqa: BLE001
-                pass
-        if caption_prefix and self.config.get("send_seed_info", True) and not card_rendered:
-            info = "✅ " + self._fmt_parts(effective) + f" · 云端模型={model}"
-            chain.append(Comp.Plain("\u200b" + info))
+        chain = await self._build_result_chain(
+            event,
+            results,
+            effective,
+            card_label=f"云端·{model}",
+            info_suffix=f"云端模型={model}",
+            caption_prefix=caption_prefix,
+            daily_card=daily_card,
+            reply_to_source=reply_to_source,
+            on_success=on_success,
+            # 普通云绘图不回显参数，只有带说明文字（如「二次元的我」）时才附上。
+            show_info=bool(caption_prefix),
+        )
         yield event.chain_result(self._maybe_forward(event, chain, opts))
 
     def _apply_cloud_prompt_preset(self, prompt: str, requested: str = None):
@@ -2811,75 +2031,16 @@ class ComfyUIDrawPlugin(Star):
         )
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = None
-            status = 0
-            url = urls[0]
-            for attempt, url in enumerate(urls):
-                try:
-                    async with session.post(url, json=body, headers=headers) as resp:
-                        response_limit = (
-                            self._max_bytes("max_output_size_mb", 100)
-                            * max(1, int(n))
-                            * 2
-                            + 1024 * 1024
-                        )
-                        raw_response = await self._read_limited(
-                            resp, response_limit, "云端绘图响应"
-                        )
-                        try:
-                            data = json.loads(raw_response.decode("utf-8"))
-                        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                            raise ComfyUIError(
-                                f"云端绘图接口返回的不是有效 JSON：{e}"
-                            )
-                        status = resp.status
-                except asyncio.TimeoutError:
-                    raise
-                except ComfyUIError:
-                    raise
-                except Exception as e:  # noqa: BLE001
-                    raise ComfyUIError(f"无法连接云端绘图接口（{url}）：{e}")
-
-                # “自动”模式允许填写项目根地址；若根路径没有图片接口，
-                # 再尝试 OpenAI 规范的 /v1/images/generations。
-                if status in {404, 405} and attempt + 1 < len(urls):
-                    continue
-                break
-
-            if status != 200:
-                raise ComfyUIError(self._format_openai_error(data, status))
-
-            items = (data or {}).get("data") or []
-            if not items:
-                raise ComfyUIError("云端绘图没有返回图片数据。")
-
-            results = []
-            for i, it in enumerate(items):
-                if not isinstance(it, dict):
-                    continue
-                b64 = it.get("b64_json")
-                if b64:
-                    try:
-                        b64 = str(b64).strip()
-                        if b64.startswith("data:") and ";base64," in b64:
-                            b64 = b64.split(";base64,", 1)[1]
-                        max_bytes = self._max_bytes("max_output_size_mb", 100)
-                        if len(b64) > (max_bytes * 4 // 3) + 16:
-                            raise ComfyUIError("云端返回的图片超过体积上限。")
-                        raw = base64.b64decode(b64)
-                    except Exception as e:  # noqa: BLE001
-                        if isinstance(e, ComfyUIError):
-                            raise
-                        raise ComfyUIError(f"图片解码失败：{e}")
-                    if len(raw) > max_bytes:
-                        raise ComfyUIError("云端返回的图片超过体积上限。")
-                    results.append((raw, f"gptimage_{i}.png"))
-                elif it.get("url"):
-                    raw = await self._download_bytes(session, it["url"])
-                    results.append((raw, f"gptimage_{i}.png"))
-            if not results:
-                raise ComfyUIError("云端绘图返回了空的图片数据。")
-            return results
+            data = await self._post_cloud_json(
+                session,
+                urls,
+                lambda: {"json": body, "headers": headers},
+                self._cloud_response_limit(n),
+                "云端绘图",
+            )
+            return await self._decode_openai_image_results(
+                session, data, prefix="gptimage", label="云端绘图"
+            )
 
     async def _run_openai_image_edit(
         self,
@@ -2944,52 +2105,61 @@ class ComfyUIDrawPlugin(Star):
             return form
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = None
-            status = 0
-            url = urls[0]
-            for attempt, url in enumerate(urls):
-                try:
-                    async with session.post(
-                        url, data=build_form(), headers=headers
-                    ) as resp:
-                        response_limit = (
-                            self._max_bytes("max_output_size_mb", 100)
-                            * count
-                            * 2
-                            + 1024 * 1024
-                        )
-                        raw_response = await self._read_limited(
-                            resp, response_limit, "云端图片编辑响应"
-                        )
-                        try:
-                            data = json.loads(raw_response.decode("utf-8"))
-                        except (UnicodeDecodeError, json.JSONDecodeError) as e:
-                            raise ComfyUIError(
-                                f"云端图片编辑接口返回的不是有效 JSON：{e}"
-                            )
-                        status = resp.status
-                except asyncio.TimeoutError:
-                    raise
-                except ComfyUIError:
-                    raise
-                except Exception as e:  # noqa: BLE001
+            data = await self._post_cloud_json(
+                session,
+                urls,
+                lambda: {"data": build_form(), "headers": headers},
+                self._cloud_response_limit(count),
+                "云端图片编辑",
+            )
+            return await self._decode_openai_image_results(
+                session, data, prefix="gptedit", label="云端图片编辑"
+            )
+
+    def _cloud_response_limit(self, count):
+        """一次响应可能包含 count 张 Base64 图片，按单图上限的两倍预留并加 1 MB 余量。"""
+        return (
+            self._max_bytes("max_output_size_mb", 100) * max(1, int(count)) * 2
+            + 1024 * 1024
+        )
+
+    async def _post_cloud_json(self, session, urls, request_kwargs, response_limit, label):
+        """依次请求候选地址并返回 JSON；仅在 404/405 且还有候选地址时换下一个。
+
+        request_kwargs 是无参函数，每次请求都重新生成参数（FormData 只能被消费一次）。
+        """
+        status, data = 0, None
+        for attempt, url in enumerate(urls):
+            try:
+                async with session.post(url, **request_kwargs()) as resp:
+                    status = resp.status
+                    # 先判断是否回退：根地址的 404 常是 HTML 页面，不能先当 JSON 解析，
+                    # 否则“自动”模式永远走不到 /v1 路径。
+                    if status in {404, 405} and attempt + 1 < len(urls):
+                        continue
+                    raw = await self._read_limited(resp, response_limit, f"{label}响应")
+            except (asyncio.TimeoutError, ComfyUIError):
+                raise
+            except Exception as e:  # noqa: BLE001
+                raise ComfyUIError(f"无法连接{label}接口（{url}）：{e}")
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                if status != 200:
                     raise ComfyUIError(
-                        f"无法连接云端图片编辑接口（{url}）：{e}"
+                        f"{label}失败（HTTP {status}）：接口返回的不是 JSON，请检查地址是否正确。"
                     )
+                raise ComfyUIError(f"{label}接口返回的不是有效 JSON：{e}")
+            break
+        if status != 200:
+            raise ComfyUIError(self._format_openai_error(data, status))
+        return data
 
-                if status in {404, 405} and attempt + 1 < len(urls):
-                    continue
-                break
-
-            if status != 200:
-                raise ComfyUIError(self._format_openai_error(data, status))
-            return await self._decode_openai_image_results(session, data)
-
-    async def _decode_openai_image_results(self, session, data):
+    async def _decode_openai_image_results(self, session, data, prefix="gptedit", label="云端图片编辑"):
         """解析图片接口共同的 b64_json / url 返回格式。"""
-        items = (data or {}).get("data") or []
-        if not items:
-            raise ComfyUIError("云端图片编辑没有返回图片数据。")
+        items = data.get("data") if isinstance(data, dict) else None
+        if not items or not isinstance(items, list):
+            raise ComfyUIError(f"{label}没有返回图片数据。")
         results = []
         max_bytes = self._max_bytes("max_output_size_mb", 100)
         for index, item in enumerate(items):
@@ -3010,12 +2180,15 @@ class ComfyUIDrawPlugin(Star):
                     raise ComfyUIError(f"图片解码失败：{e}")
                 if len(raw) > max_bytes:
                     raise ComfyUIError("云端返回的图片超过体积上限。")
-                results.append((raw, f"gptedit_{index}.png"))
             elif item.get("url"):
                 raw = await self._download_bytes(session, item["url"])
-                results.append((raw, f"gptedit_{index}.png"))
+            else:
+                continue
+            # 按文件头确定扩展名，JPEG/WebP 结果不再一律标成 .png。
+            ext = self._image_upload_meta(raw)[0].rsplit(".", 1)[-1]
+            results.append((raw, f"{prefix}_{index}.{ext}"))
         if not results:
-            raise ComfyUIError("云端图片编辑返回了空的图片数据。")
+            raise ComfyUIError(f"{label}返回了空的图片数据。")
         return results
 
     async def _download_bytes(self, session, url):
@@ -3098,7 +2271,14 @@ class ComfyUIDrawPlugin(Star):
                         f"{http_base}/prompt",
                         json={"prompt": workflow, "client_id": client_id},
                     ) as resp:
-                        body = await resp.json(content_type=None)
+                        try:
+                            body = await resp.json(content_type=None)
+                        except ValueError:
+                            # 反向代理或 ComfyUI 崩溃时可能返回 HTML/空响应。
+                            raise ComfyUIError(
+                                f"ComfyUI 返回了无法解析的响应（HTTP {resp.status}），"
+                                "请检查地址或查看 ComfyUI 控制台日志。"
+                            )
                         if resp.status != 200:
                             raise ComfyUIError(self._format_prompt_error(body))
                         prompt_id = body.get("prompt_id")
@@ -3290,10 +2470,6 @@ class ComfyUIDrawPlugin(Star):
         return self._resolve_named(name)
 
     @staticmethod
-    def _contains_placeholder(text):
-        return bool(ComfyUIDrawPlugin._placeholder_names(text))
-
-    @staticmethod
     def _placeholder_names(text):
         if not isinstance(text, str):
             return set()
@@ -3382,17 +2558,6 @@ class ComfyUIDrawPlugin(Star):
                     result = result.replace(ph, str(val))
             return result
         return obj
-
-    def _set_all_seeds(self, workflow: dict, seed_value: int):
-        for node in workflow.values():
-            if not isinstance(node, dict):
-                continue
-            inputs = node.get("inputs")
-            if not isinstance(inputs, dict):
-                continue
-            for k, v in list(inputs.items()):
-                if k in ("seed", "noise_seed") and isinstance(v, int) and not isinstance(v, bool):
-                    inputs[k] = seed_value
 
     # ------------------------------------------------------------------ #
     # 原始工作流（无占位符）的智能参数注入
@@ -3833,16 +2998,11 @@ class ComfyUIDrawPlugin(Star):
         return " ".join(positive).strip(), opts
 
     def _resolve_size(self, size_str):
+        parsed = self._parse_size_strict(size_str)
+        if parsed is not None:
+            return parsed
         dw = self._config_int("default_width", 512, 64, 2048)
         dh = self._config_int("default_height", 512, 64, 2048)
-        if size_str:
-            for sep in ("x", "X", "*", "×", "✕", "✖"):
-                if sep in size_str:
-                    a, _, b = size_str.partition(sep)
-                    try:
-                        return self._clamp_dim(int(a)), self._clamp_dim(int(b))
-                    except Exception:
-                        break
         return self._round8(dw), self._round8(dh)
 
     def _clamp_dim(self, v):

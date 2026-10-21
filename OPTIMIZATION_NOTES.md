@@ -1,3 +1,15 @@
+# v1.11.2-optimized
+
+- 修复云绘图 `auto` 模式在根地址返回 HTML 404/405 页面时直接报“不是有效 JSON”、无法回退到 `/v1` 接口的问题；现在先判断状态码再解析响应。
+- 云端接口返回非 JSON 的错误页（如网关 502）时，报错会显示 HTTP 状态码，便于排查地址或网关问题。
+- 修复以 `file:///` 地址或 `path` 字段提供的本地图片（AstrBot `fromFileSystem` 等平台）无法作为原图读取的问题，图生图、`/变手办` 与 ComfyUI LoadImage 均受益。
+- ComfyUI `/prompt` 返回 HTML 或空响应时给出可读错误，不再显示 `JSONDecodeError`。
+- 云端返回的 JPEG/WebP 图片按文件头使用正确扩展名，不再一律标为 `.png`。
+- 重构：文生图与图片编辑共用请求回退和结果解析逻辑；本地与云端出图共用进度提示和结果消息组装；删除未使用的方法和重复的尺寸解析代码。行为与配置项保持不变。
+- 拆分文件：默认工作流与卡片 HTML 模板移至 `templates.py`，参数别名、尺寸与云绘图预设、「二次元的我」词库移至 `presets.py`；`main.py` 从约 4200 行降至约 3400 行。预设、模板与每日抽取结果均保持不变。
+- 手动升级请替换整个插件文件夹，不要只覆盖 `main.py`。
+- 新增 `tests/test_cloud_and_inputs.py` 离线回归测试。
+
 # v1.11.1-optimized
 
 - 修复部分 Antigravity 模型返回 `Aspect ratio is not enabled for this model` 时无法出图：默认 `auto` 模式仅针对该明确的 HTTP 400 拒绝，去掉 `aspectRatio` 并保留构图比例提示后再尝试一次。
