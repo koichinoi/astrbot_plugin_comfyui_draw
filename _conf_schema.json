@@ -274,6 +274,12 @@
     "default": "auto",
     "options": ["auto", "strict", "prompt"]
   },
+  "gemini_text_only_retry": {
+    "type": "bool",
+    "description": "Gemini 只回文字时自动重试一次",
+    "hint": "仅 sub2api-antigravity 模式使用。提示词很短（如只写角色名）时，模型偶尔只回一段文字、不出图；开启后会明确要求出图并重试一次。安全拦截、超时、限流不会重试。每次重试会再调用一次接口。",
+    "default": true
+  },
   "openai_image_size": {
     "type": "string",
     "description": "云端绘图默认尺寸",

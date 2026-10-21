@@ -196,7 +196,8 @@ class RequestTests(unittest.IsolatedAsyncioTestCase):
         fallback = session.calls[1][1]["json"]
         self.assertEqual(initial["generationConfig"]["imageConfig"]["aspectRatio"], "9:16")
         self.assertEqual(fallback["generationConfig"]["imageConfig"], {"imageSize": "2K"})
-        self.assertEqual(fallback["contents"][0]["parts"][:2], initial["contents"][0]["parts"])
+        initial_parts = initial["contents"][0]["parts"]
+        self.assertEqual(fallback["contents"][0]["parts"][:len(initial_parts)], initial_parts)
         self.assertIn("9:16", fallback["contents"][0]["parts"][-1]["text"])
         self.assertEqual(session.calls[2][1]["json"], fallback)
 
@@ -286,7 +287,8 @@ class RequestTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(item[0] == "plain" and "1/2" in item[1] for item in outputs))
         self.assertEqual(outputs[-1][0], "chain")
         self.assertIn(("image", PNG), outputs[-1][1])
-        self.assertIn("figurine", session.calls[0][1]["json"]["contents"][0]["parts"][-1]["text"].lower())
+        texts = [part.get("text", "") for part in session.calls[0][1]["json"]["contents"][0]["parts"]]
+        self.assertTrue(any("figurine" in text.lower() for text in texts))
 
     async def test_daily_card_actual_dimensions_and_model(self):
         obj = configured(openai_image_quality="high", gemini_image_resolution="1K")
