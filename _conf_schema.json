@@ -221,18 +221,19 @@
   "openai_image_provider": {
     "type": "string",
     "description": "云端绘图接口类型",
-    "hint": "auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时自动尝试 /v1；chatgpt2api 会自动补全 /v1/images/generations，并默认使用 b64_json；openai-compatible 只在配置地址后拼接 /images/generations。",
+    "hint": "sub2api-antigravity 使用 Sub2API 的 Antigravity/Gemini 原生文生图与图片编辑接口；auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时尝试 /v1；chatgpt2api 自动补全 /v1/images/generations；openai-compatible 直接拼接 /images/generations。",
     "default": "auto",
     "options": [
       "auto",
       "chatgpt2api",
-      "openai-compatible"
+      "openai-compatible",
+      "sub2api-antigravity"
     ]
   },
   "openai_image_base_url": {
     "type": "string",
     "description": "云端绘图 API 地址（/云绘图 用）",
-    "hint": "OpenAI 兼容的图片生成接口基址。chatgpt2api 模式可直接填写项目根地址（如 http://127.0.0.1:3000），也可填写带 /v1 的地址；留空则禁用云端绘图。",
+    "hint": "Sub2API Antigravity 模式填站点根地址（如 https://你的站点），也兼容 /antigravity、/antigravity/v1beta 或 /v1 后缀；插件自动构造 Gemini 原生请求。chatgpt2api 可填项目根地址或 /v1。留空禁用云绘图。",
     "default": ""
   },
   "openai_quota_admin_only": {
@@ -249,20 +250,40 @@
   },
   "openai_image_model": {
     "type": "string",
-    "description": "云端绘图模型名",
-    "hint": "如 gpt-image-2。按你所用服务支持的模型填写。",
+    "description": "OpenAI / ChatGPT2API 绘图模型名",
+    "hint": "如 gpt-image-2。Sub2API Antigravity 模式使用下方独立的 gemini_image_model，不使用此项。",
     "default": "gpt-image-2"
+  },
+  "gemini_image_model": {
+    "type": "string",
+    "description": "Sub2API Antigravity 绘图模型名",
+    "hint": "仅 sub2api-antigravity 模式使用。默认 gemini-3.1-flash-image；也可按站点实际支持情况填 gemini-3-pro-image 等图片模型。Antigravity-Pro 是分组名，不能作为模型名；Key 所属分组需允许绘图和该模型。",
+    "default": "gemini-3.1-flash-image"
+  },
+  "gemini_image_resolution": {
+    "type": "string",
+    "description": "Sub2API Antigravity 输出清晰度",
+    "hint": "1K / 2K / 4K，以所选模型和站点权限为准；更高档位可能增加耗时与费用。命令 --quality 2K 可临时覆盖。本模式不使用 OpenAI 默认质量。",
+    "default": "1K",
+    "options": ["1K", "2K", "4K"]
+  },
+  "gemini_image_aspect_mode": {
+    "type": "string",
+    "description": "Gemini 比例参数兼容模式",
+    "hint": "auto：仅遇到 HTTP 400 的 Aspect ratio is not enabled for this model 时，去掉比例字段并将比例写入提示词，再尝试一次，本次加载期间记住该模型限制；strict：严格传比例，不回退；prompt：始终仅在提示词描述比例，适合不支持 aspectRatio 的模型，输出比例由模型决定。",
+    "default": "auto",
+    "options": ["auto", "strict", "prompt"]
   },
   "openai_image_size": {
     "type": "string",
     "description": "云端绘图默认尺寸",
-    "hint": "常用档位：1024x1024（方）、1024x1536（竖）、1536x1024（横）。GPT-Image 2 还支持符合限制的自定义宽高；命令里可用 --size 临时修改。图生图默认优先沿用原图分辨率。",
+    "hint": "常用档位：1024x1024（方）、1024x1536（竖）、1536x1024（横）。Antigravity 模式将宽高映射到最接近的模型支持比例，也接受 16:9 等比例；清晰度由 gemini_image_resolution 控制，不保证与输入图像素完全一致。命令 --size 可覆盖。",
     "default": "1024x1024"
   },
   "openai_image_quality": {
     "type": "string",
     "description": "云端绘图默认质量（quality）",
-    "hint": "留空则不发送该参数（用接口默认）。常见取值：standard / hd（DALL·E 3），gpt-image 系为 low / medium / high / auto，以你所用接口文档为准。命令里 --quality（-q）可临时改。",
+    "hint": "OpenAI 模式：留空用接口默认，常见 standard / hd 或 low / medium / high / auto。Antigravity 模式忽略此配置，使用独立的 gemini_image_resolution；命令 --quality 1K、2K、4K 可临时覆盖。",
     "default": ""
   },
   "openai_image_style": {
@@ -286,7 +307,7 @@
   "openai_image_edit_use_source_size": {
     "type": "bool",
     "description": "云端图生图沿用原图分辨率",
-    "hint": "开启后，未手动指定 --size 时会读取第一张原图的宽高作为输出尺寸。GPT-Image 2 会尽量保持原尺寸，并自动对齐到接口要求的 16 像素倍数；较旧模型会映射到最接近原图比例的固定档位。",
+    "hint": "开启后，未指定 --size 时优先读取第一张原图宽高。GPT-Image 2 尽量保持原尺寸并对齐 16 像素倍数；Antigravity/Gemini 映射到最接近的支持比例，按 1K/2K/4K 输出，无法承诺原始像素完全一致；旧模型使用固定尺寸档位。",
     "default": true
   },
   "openai_image_timeout": {

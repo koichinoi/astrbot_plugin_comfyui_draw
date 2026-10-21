@@ -7,6 +7,7 @@ import random
 import tempfile
 import time
 import uuid
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import aiohttp
 
@@ -240,7 +241,7 @@ CLOUD_PRESET_CARD_TMPL = """
           <div class="subtitle">一条参数，快速切换成品风格</div>
         </div>
       </div>
-      <div class="badge">GPT-Image · 文生图 / 图生图</div>
+      <div class="badge">云端绘图 · 文生图 / 图生图</div>
     </div>
     <div class="grid">
       {% for item in items %}
@@ -1458,6 +1459,10 @@ class ComfyUIDrawPlugin(Star):
         if width <= 0 or height <= 0:
             return None
 
+        if self._openai_image_provider() == "sub2api-antigravity":
+            # Gemini 只接受比例与分辨率档位，先保留原比例供请求构建时映射。
+            return f"{width}x{height}"
+
         model = str(
             self.config.get("openai_image_model", "") or "gpt-image-2"
         ).strip().lower()
@@ -1932,7 +1937,7 @@ class ComfyUIDrawPlugin(Star):
                 {"name": "--batch N", "desc": "一次生成张数"},
                 {"name": "-w 名称", "desc": "指定用哪套工作流"},
                 {"name": "--lora 名:权重", "desc": "临时叠加 LoRA，可多次"},
-                {"name": "--quality 值", "desc": "生成质量 · 云绘图（standard / hd）"},
+                {"name": "--quality 值", "desc": "云绘图质量；Antigravity 用 1K / 2K / 4K"},
                 {"name": "--style 值", "desc": "画风 · 云绘图（vivid / natural）"},
                 {"name": "--手办/--头像等", "desc": "云绘图提示词预设；用 /云绘图预设 查看全部"},
                 {"name": "--转发 / --fw", "desc": "本次用合并转发发送图片"},
@@ -2053,7 +2058,7 @@ class ComfyUIDrawPlugin(Star):
 
     @filter.command("云绘图", alias={"gptdraw", "gptimage", "clouddraw", "gpt绘图"})
     async def draw_gpt(self, event: AstrMessageEvent):
-        """用云端 GPT-Image 接口绘图。用法：/云绘图 <提示词> [--size 1024x1024] [--batch N]"""
+        """用配置的云端接口绘图。用法：/云绘图 <提示词> [--size 1024x1024] [--batch N]"""
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
@@ -2208,7 +2213,7 @@ class ComfyUIDrawPlugin(Star):
     @filter.llm_tool(name="draw_image_gpt")
     async def draw_image_gpt_tool(self, event: AstrMessageEvent,
                                   prompt: str, size: str = "") -> MessageEventResult:
-        '''用云端 GPT-Image 模型画图，擅长写实照片风、复杂场景、以及在画面里正确写出文字。当用户想要写实 / 非二次元画风，或需要图中带文字时优先用本工具；动漫、二次元角色画风请改用 draw_image。仅在用户明确想要图片时才调用。
+        '''用配置的云端图片模型画图（GPT-Image 或 Sub2API Antigravity/Gemini），支持中文描述、动漫、写实、海报及 UI。用户要求云绘图时使用本工具；引用或附带图片时自动编辑原图。仅在用户明确想要图片时才调用。
 
         Args:
             prompt(string): 画面内容描述，自然语言即可，支持中文，越具体越好。例如 "一只戴贝雷帽的柴犬坐在咖啡馆窗边，水彩插画风"。
@@ -2287,6 +2292,17 @@ class ComfyUIDrawPlugin(Star):
             n = min(n, 4)
         quality = (opts.get("quality") or "").strip() or str(self.config.get("openai_image_quality", "") or "").strip() or None
         style = (opts.get("style") or "").strip() or str(self.config.get("openai_image_style", "") or "").strip() or None
+        is_antigravity = self._openai_image_provider() == "sub2api-antigravity"
+        if is_antigravity:
+            # GPT-Image 的 high/hd 等默认值不应覆盖 Gemini 独立清晰度设置。
+            quality = (opts.get("quality") or "").strip() or None
+        gemini_config = None
+        if is_antigravity:
+            try:
+                gemini_config = self._gemini_image_config(size_str, quality)
+            except ComfyUIError as e:
+                yield event.plain_result(f"❌ 参数错误：{e}")
+                return
 
         self._sweep_temp()
         progress_message_id = None
@@ -2294,9 +2310,12 @@ class ComfyUIDrawPlugin(Star):
             parts = []
             if preset_name:
                 parts.append(f"预设={preset_name}")
-            if size_str:
+            if gemini_config:
+                parts.append(f"构图比例={gemini_config.get('aspectRatio', '自动')}")
+                parts.append(gemini_config["imageSize"])
+            elif size_str:
                 parts.append(size_str)
-            if quality:
+            if quality and not is_antigravity:
                 parts.append(f"质量={quality}")
             if style:
                 parts.append(f"画风={style}")
@@ -2304,7 +2323,8 @@ class ComfyUIDrawPlugin(Star):
                 parts.append(f"原图={len(source_images)}张")
             parts.append(f"×{n}")
             action = "编辑原图" if source_images else "生成"
-            progress_text = f"🎨 正在用云端 GPT-Image {action}（" + " · ".join(parts) + "）..."
+            backend_label = "Antigravity/Gemini" if is_antigravity else "GPT-Image"
+            progress_text = f"🎨 正在用云端 {backend_label} {action}（" + " · ".join(parts) + "）..."
             if self.config.get("auto_recall_progress", True):
                 progress_message_id, progress_sent = await self._send_progress_message(
                     event, progress_text
@@ -2328,6 +2348,7 @@ class ComfyUIDrawPlugin(Star):
                     )
         except ComfyUIError as e:
             generation_error = f"❌ {e}"
+            results = getattr(e, "partial_results", [])
         except asyncio.TimeoutError:
             generation_error = "❌ 云端绘图超时，请稍后再试或减少张数。"
         except Exception as e:  # noqa: BLE001
@@ -2338,10 +2359,16 @@ class ComfyUIDrawPlugin(Star):
 
         if generation_error:
             yield event.plain_result(generation_error)
-            return
+            if not results:
+                return
 
         effective = {}
-        if size_str and "x" in size_str:
+        if is_antigravity and results:
+            # 卡片展示真实返回像素，不能把请求的近似比例标成实际分辨率。
+            dimensions = self._image_dimensions(results[0][0])
+            if dimensions:
+                effective["width"], effective["height"] = dimensions
+        elif size_str and "x" in size_str:
             width, height = size_str.split("x", 1)
             if width.isdigit() and height.isdigit():
                 effective["width"] = int(width)
@@ -2354,9 +2381,7 @@ class ComfyUIDrawPlugin(Star):
                 chain.append(reply)
 
         card_rendered = False
-        model = str(
-            self.config.get("openai_image_model", "") or "gpt-image-2"
-        ).strip()
+        model = self._cloud_image_model()
         if daily_card and caption_prefix and results:
             card_path = await self._render_daily_me_card(
                 caption_prefix,
@@ -2398,9 +2423,247 @@ class ComfyUIDrawPlugin(Star):
         provider = str(
             self.config.get("openai_image_provider", "auto") or "auto"
         ).strip().lower()
-        if provider not in {"auto", "chatgpt2api", "openai-compatible"}:
+        if provider not in {
+            "auto", "chatgpt2api", "openai-compatible", "sub2api-antigravity"
+        }:
             return "auto"
         return provider
+
+    def _cloud_image_model(self) -> str:
+        if self._openai_image_provider() == "sub2api-antigravity":
+            return str(self.config.get("gemini_image_model", "") or "").strip() or "gemini-3.1-flash-image"
+        return str(self.config.get("openai_image_model", "") or "").strip() or "gpt-image-2"
+
+    @staticmethod
+    def _antigravity_image_url(base: str, model: str) -> str:
+        """保留反向代理前缀，并归一化根地址、版本路径或完整 Gemini 接口。"""
+        parsed = urlsplit(str(base or "").strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ComfyUIError("Sub2API 地址必须是 http:// 或 https:// 开头的服务地址。")
+        if parsed.username or parsed.password:
+            raise ComfyUIError("Sub2API 地址不能包含用户名密码，请使用 API Key 配置。")
+        path = parsed.path.rstrip("/")
+        if "/models/" in path:
+            path = path.rsplit("/models/", 1)[0]
+        for suffix in (
+            "/antigravity/v1beta", "/antigravity/v1", "/antigravity",
+            "/v1/images/generations", "/v1/images/edits",
+            "/images/generations", "/images/edits", "/v1beta", "/v1",
+        ):
+            if path.endswith(suffix):
+                path = path[:-len(suffix)]
+                break
+        model = str(model or "").strip().removeprefix("models/")
+        if not model:
+            raise ComfyUIError("请填写 Sub2API 分组允许使用的 Gemini 绘图模型名。")
+        path += f"/antigravity/v1beta/models/{quote(model, safe='')}:generateContent"
+        return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+    def _gemini_image_config(self, size=None, quality=None):
+        """将命令宽高转换成受支持的比例；分辨率档位单独指定。"""
+        resolution = str(self.config.get("gemini_image_resolution", "1K") or "1K").strip().upper()
+        if quality:
+            requested = str(quality).strip().upper()
+            if requested not in {"1K", "2K", "4K"}:
+                raise ComfyUIError(
+                    "Antigravity 的 --quality 只接受 1K、2K、4K；"
+                    "请清空原 GPT-Image 默认质量，改用 gemini_image_resolution。"
+                )
+            resolution = requested
+        if resolution not in {"1K", "2K", "4K"}:
+            raise ComfyUIError("Gemini 绘图分辨率档位只能是 1K、2K 或 4K。")
+        config = {"imageSize": resolution}
+        requested_size = str(size or self.config.get("openai_image_size", "") or "").strip()
+        if not requested_size or requested_size.lower() == "auto":
+            return config
+        normalized = requested_size.lower()
+        for sep in ("*", "×", "✕", "✖", ":"):
+            normalized = normalized.replace(sep, "x")
+        try:
+            width, height = (int(v.strip()) for v in normalized.split("x"))
+        except (TypeError, ValueError):
+            raise ComfyUIError("Gemini 尺寸应为 宽x高 或 比例，例如 1536x1024、16:9。")
+        if width <= 0 or height <= 0:
+            raise ComfyUIError("图片宽高必须大于 0。")
+        ratios = ("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9")
+        # 对数距离对横竖比对称，原图分辨率不影响选定的比例。
+        target = math.log(width) - math.log(height)
+        config["aspectRatio"] = min(
+            ratios,
+            key=lambda value: abs(target - math.log(int(value.split(":")[0]) / int(value.split(":")[1]))),
+        )
+        return config
+
+    def _gemini_aspect_mode(self):
+        mode = str(self.config.get("gemini_image_aspect_mode", "auto") or "auto").strip().lower()
+        if mode not in {"auto", "strict", "prompt"}:
+            raise ComfyUIError("Gemini 比例兼容模式只能是 auto、strict 或 prompt。")
+        return mode
+
+    @staticmethod
+    def _gemini_without_aspect_ratio(body):
+        """只去掉被拒绝的比例字段，原图、提示词、清晰度均保留。"""
+        generation = dict(body["generationConfig"])
+        image_config = dict(generation["imageConfig"])
+        ratio = image_config.pop("aspectRatio", None)
+        generation["imageConfig"] = image_config
+        revised = {**body, "generationConfig": generation}
+        if ratio:
+            contents = list(body["contents"])
+            content = dict(contents[0])
+            content["parts"] = [*content["parts"], {
+                "text": f"Composition preference: use a {ratio} width-to-height aspect ratio if possible; follow the model's available image output capabilities."
+            }]
+            contents[0] = content
+            revised["contents"] = contents
+        return revised
+
+    def _decode_gemini_image_results(self, data):
+        """读取最终 inlineData 图片，跳过思考过程中的预览图。"""
+        if not isinstance(data, dict):
+            raise ComfyUIError("Antigravity 返回了无效的 Gemini 响应。")
+        if isinstance(data.get("response"), dict):
+            data = data["response"]
+        if data.get("error"):
+            raise ComfyUIError(self._format_openai_error(data, 200))
+        results, details = [], []
+        candidates = data.get("candidates") or []
+        if not isinstance(candidates, list):
+            raise ComfyUIError("Antigravity 返回的 candidates 格式不正确。")
+        extensions = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif"}
+        max_bytes = self._max_bytes("max_output_size_mb", 100)
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if candidate.get("finishReason"):
+                details.append(str(candidate["finishReason"]))
+            content = candidate.get("content") or {}
+            parts = content.get("parts", []) if isinstance(content, dict) else []
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if not isinstance(part, dict) or part.get("thought"):
+                    continue
+                if part.get("text"):
+                    details.append(str(part["text"])[:300])
+                inline = part.get("inlineData") or part.get("inline_data")
+                if not isinstance(inline, dict):
+                    continue
+                mime = str(inline.get("mimeType") or inline.get("mime_type") or "").lower()
+                if mime not in extensions:
+                    continue
+                encoded = inline.get("data")
+                if not isinstance(encoded, str) or not encoded.strip():
+                    raise ComfyUIError("Antigravity 返回的图片数据为空。")
+                if len(encoded) > ((max_bytes + 2) // 3) * 4:
+                    raise ComfyUIError("云端返回的图片超过体积上限。")
+                try:
+                    raw = base64.b64decode(encoded, validate=True)
+                except (ValueError, base64.binascii.Error):
+                    raise ComfyUIError("Antigravity 返回的图片 Base64 数据无效。")
+                if not raw or len(raw) > max_bytes:
+                    raise ComfyUIError("云端返回的图片为空或超过体积上限。")
+                results.append((raw, f"gemini_{len(results)}.{extensions[mime]}"))
+        if not results:
+            feedback = data.get("promptFeedback") or {}
+            if isinstance(feedback, dict) and feedback.get("blockReason"):
+                details.insert(0, str(feedback["blockReason"]))
+            reason = "；".join(details)[:400] or "请检查绘图模型名、分组绘图权限和上游图片额度。"
+            raise ComfyUIError(
+                f"Antigravity 没有返回最终图片：{reason} "
+                "请确认站点实际映射到支持图片输出的模型，而非仅支持文字或看图的模型。"
+            )
+        return results
+
+    async def _run_antigravity_image(self, prompt, size=None, n=1, source_images=None, quality=None, style=None):
+        """原生绘图；仅对明确的比例参数 400 拒绝做一次兼容回退。"""
+        base = str(self.config.get("openai_image_base_url", "") or "").strip()
+        key = str(self.config.get("openai_image_api_key", "") or "").strip()
+        if not base or not key:
+            raise ComfyUIError("请先填写 Sub2API 的 openai_image_base_url 和 openai_image_api_key。")
+        url = self._antigravity_image_url(base, self._cloud_image_model())
+        image_config = self._gemini_image_config(size, quality)
+        aspect_mode = self._gemini_aspect_mode()
+        parts = []
+        for index, raw in enumerate(source_images or []):
+            if not raw or len(raw) > self._max_bytes("max_input_size_mb", 20):
+                raise ComfyUIError("原图为空或超过输入图片体积上限。")
+            _, mime = self._image_upload_meta(raw, index)
+            if mime == "image/gif":
+                raise ComfyUIError("Gemini 图片编辑请使用 PNG、JPEG 或 WebP 原图，暂不支持 GIF。")
+            parts.append({"inlineData": {"mimeType": mime, "data": base64.b64encode(raw).decode("ascii")}})
+        text = str(prompt)
+        if style:
+            text += f"\nVisual style: {str(style).strip()}"
+        parts.append({"text": text})
+        body = {
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": image_config},
+        }
+        disabled_urls = getattr(self, "_gemini_aspect_disabled_urls", None)
+        if disabled_urls is None:
+            disabled_urls = self._gemini_aspect_disabled_urls = set()
+        if aspect_mode == "prompt" or (aspect_mode == "auto" and url in disabled_urls):
+            body = self._gemini_without_aspect_ratio(body)
+        count = self._clamp_batch(int(n))
+        seconds = self._config_int("openai_image_timeout", 180, 1, 3600)
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        results = []
+
+        async def generate():
+            nonlocal body
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=seconds)) as session:
+                for index in range(count):
+                    while True:
+                        async with session.post(url, json=body, headers=headers, allow_redirects=False) as resp:
+                            raw = await self._read_limited(
+                                resp, self._max_bytes("max_output_size_mb", 100) * 2 + 1024 * 1024,
+                                "Antigravity 绘图响应",
+                            )
+                            try:
+                                payload = json.loads(raw.decode("utf-8"))
+                            except (UnicodeDecodeError, json.JSONDecodeError):
+                                raise ComfyUIError(f"Antigravity 接口返回非 JSON（HTTP {resp.status}），请检查站点地址或网关超时。")
+                            if resp.status != 200:
+                                message = self._format_openai_error(payload, resp.status)
+                                aspect_rejected = (
+                                    resp.status == 400
+                                    and "aspect ratio is not enabled for this model" in message.lower()
+                                )
+                                if (aspect_rejected and aspect_mode == "auto"
+                                        and "aspectRatio" in body["generationConfig"]["imageConfig"]):
+                                    # 只针对已明确拒绝的字段回退一次；不重试超时、限流或生成失败。
+                                    body = self._gemini_without_aspect_ratio(body)
+                                    disabled_urls.add(url)
+                                    logger.warning("[comfyui_draw] 模型拒绝 aspectRatio，已省略该字段并将比例转为构图提示；本次加载期间记住此模型限制。")
+                                    continue
+                                if aspect_rejected:
+                                    message += "；可将 gemini_image_aspect_mode 设为 prompt。若仍报错，请检查站点的模型映射。"
+                                if resp.status == 403:
+                                    message += "；请检查 Key 所属分组的绘图权限、模型白名单和额度。"
+                                raise ComfyUIError(message)
+                            images = self._decode_gemini_image_results(payload)
+                            image, filename = images[0]
+                            results.append((image, f"gemini_{index}.{filename.rsplit('.', 1)[-1]}"))
+                            break
+            return results
+
+        try:
+            # 所有张数共享同一超时预算，避免批量任务占用任务槽过久。
+            return await asyncio.wait_for(generate(), timeout=seconds)
+        except Exception as e:  # noqa: BLE001
+            if isinstance(e, asyncio.TimeoutError):
+                message = "Antigravity 绘图超时，请减少张数或提高云端绘图超时时间。"
+            elif isinstance(e, ComfyUIError):
+                message = str(e)
+            else:
+                # 避免把含有请求头/密钥的底层异常直接发到聊天中。
+                message = f"无法连接 Antigravity 绘图接口（{type(e).__name__}）。"
+            if results:
+                message += f" 已完成 {len(results)}/{count} 张，以下发送已生成图片；未自动重试。"
+            error = ComfyUIError(message)
+            error.partial_results = results
+            raise error from None
 
     @staticmethod
     def _openai_project_root(base: str) -> str:
@@ -2416,6 +2679,8 @@ class ComfyUIDrawPlugin(Star):
 
     async def _fetch_cloud_quota(self):
         """读取 ChatGPT2API 的公开健康信息与账号池额度统计。"""
+        if self._openai_image_provider() == "sub2api-antigravity":
+            raise ComfyUIError("Antigravity 模式暂不支持 /云绘图额度，请在 Sub2API 控制台查看余额与分组额度。")
         base = str(self.config.get("openai_image_base_url", "") or "").strip()
         if not base:
             raise ComfyUIError(
@@ -2516,6 +2781,8 @@ class ComfyUIDrawPlugin(Star):
                                 quality: str = None, style: str = None):
         """调用 OpenAI 兼容的 /images/generations 接口，返回 list[(bytes, filename)]。
         失败抛出 ComfyUIError / asyncio.TimeoutError。"""
+        if self._openai_image_provider() == "sub2api-antigravity":
+            return await self._run_antigravity_image(prompt, size, n, quality=quality, style=style)
         base = str(self.config.get("openai_image_base_url", "") or "").strip().rstrip("/")
         key = str(self.config.get("openai_image_api_key", "") or "").strip()
         model = str(self.config.get("openai_image_model", "") or "").strip() or "gpt-image-2"
@@ -2623,6 +2890,10 @@ class ComfyUIDrawPlugin(Star):
         quality: str = None,
     ):
         """调用 OpenAI 兼容的 /images/edits，以 multipart 上传一张或多张原图。"""
+        if self._openai_image_provider() == "sub2api-antigravity":
+            if not source_images:
+                raise ComfyUIError("图片编辑需要至少一张原图。")
+            return await self._run_antigravity_image(prompt, size, n, source_images, quality=quality)
         base = str(
             self.config.get("openai_image_base_url", "") or ""
         ).strip().rstrip("/")
@@ -3805,7 +4076,7 @@ class ComfyUIDrawPlugin(Star):
             "--batch N        一次生成张数\n"
             "-w <工作流名>    选择某套工作流（见 /绘图列表）\n"
             "--lora 名称[:权重]  临时加 LoRA，可多次，如 --lora styleA:0.8\n"
-            "--quality 值     生成质量（云绘图，如 standard / hd）\n"
+            "--quality 值     云绘图质量；Antigravity 用 1K / 2K / 4K\n"
             "--style 值       画风（云绘图，如 vivid / natural）\n"
             "--手办/--头像等  云绘图提示词预设（发送 /云绘图预设 查看全部）\n"
             "--转发 / --fw    本次结果用合并转发发送（也可在配置里全局开启）\n"

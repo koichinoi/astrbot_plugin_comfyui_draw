@@ -178,7 +178,7 @@ AstrBot/
 生成来源可在 `daily_me_backend` 中切换：
 
 - `comfyui`：使用 `daily_me_workflow` 指定的本地工作流。
-- `cloud`：使用已配置的云绘图接口，包括 ChatGPT2API；尺寸由 `daily_me_cloud_size` 控制。标签式角色设定会自动包装为适合 GPT-Image 的自然语言提示词，负面词会转换为“不要出现”的要求。
+- `cloud`：使用已配置的云绘图接口，包括 ChatGPT2API 或 Sub2API Antigravity；尺寸由 `daily_me_cloud_size` 控制。标签式角色设定会自动包装为自然语言提示词，负面词会转换为“不要出现”的要求。
 
 两种来源都会保留每日一次限制、资料卡、引用原消息和完整分辨率原图。云绘图会消耗对应接口额度。
 
@@ -199,9 +199,9 @@ AstrBot/
 - 想每次都加某个 LoRA：在配置 `default_loras` 里填（每行一个 `名称` 或 `名称:权重`）。
 - 注意：插入的是「仅模型」LoRA（影响 UNet），不改 CLIP/文本编码；绝大多数画风 LoRA 这样就够。LoRA 的触发词仍要自己写进提示词。
 
-## 云端 GPT-Image（可选）
+## 云端绘图（GPT-Image / Antigravity，可选）
 
-除了本地 ComfyUI，插件还支持调用 OpenAI 兼容的云端图片接口（如 `gpt-image-2`）。它擅长写实风、复杂场景、以及在画面里写文字。
+除了本地 ComfyUI，插件还支持调用 OpenAI 兼容的云端图片接口（如 `gpt-image-2`）和 Sub2API 的 Antigravity/Gemini 原生图片接口。
 
 启用方法：在配置里填你所用服务的 `openai_image_base_url`、`openai_image_api_key`、`openai_image_model`（如 `gpt-image-2`），保存即可。然后：
 
@@ -269,6 +269,49 @@ AstrBot/
 文生图使用 `/v1/images/generations`，引用/附带原图时使用 multipart 格式的 `/v1/images/edits`。插件也支持把接口类型留在 `auto`：根路径返回 404/405 时，会自动改试对应的 `/v1` 路径。ChatGPT2API 属于非官方逆向项目，请遵守该项目说明，只在你有权使用的账号和环境中部署。
 
 管理员发送 `/云绘图额度`，插件会读取 ChatGPT2API 的 `/health?format=json`，显示当前/可用账号数、账号池剩余额度、限流/异常/禁用数量及累计成功失败次数。这里的“剩余额度”是项目账号池合计，不是官方 API 的货币账单余额；其他 OpenAI 兼容服务若没有该健康接口，会返回“不支持额度查询”的提示。
+
+### 接入 Sub2API Antigravity
+
+适用于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 的 Antigravity 分组。`Antigravity-Pro` 是站点分组名称，不是请求使用的模型名。
+
+在插件配置里填写：
+
+| 配置项 | 填写内容 |
+| --- | --- |
+| `openai_image_provider` | `sub2api-antigravity` |
+| `openai_image_base_url` | 你的 Sub2API 站点根地址，例如 `https://api.example.com` |
+| `openai_image_api_key` | 绑定到可用 Antigravity 分组的 Sub2API API Key |
+| `gemini_image_model` | 默认 `gemini-3.1-flash-image`，按站点模型列表调整，也可使用站点支持的 `gemini-3-pro-image` 等图片模型 |
+| `gemini_image_resolution` | `1K`、`2K` 或 `4K`，默认 `1K`；以模型和站点支持情况为准 |
+| `gemini_image_aspect_mode` | 默认 `auto`；不支持比例参数的模型可选 `prompt`；`strict` 不做兼容回退 |
+| `openai_image_timeout` | 默认 180 秒；上游较慢时可适当提高 |
+
+接口地址可带 `/v1`、`/antigravity`、`/antigravity/v1beta`，插件会统一构造：
+
+```text
+POST /antigravity/v1beta/models/{模型名}:generateContent
+Authorization: Bearer <Sub2API API Key>
+```
+
+文生图与原图编辑都走 Gemini 原生格式；引用/附带图片会通过 `contents.parts.inlineData` 上传，输出读取 `candidates[].content.parts[].inlineData`，思考阶段预览图不作为最终结果发送。不会把 Antigravity 请求发往 `/v1/images/generations` 或 `/v1/images/edits`。
+
+```text
+/云绘图 粉发少女站在盛开的樱花树下，远景全身，树冠和树干清晰可见 --横图
+/云绘图 二次元咖啡店联动菜单 --联动菜单 --quality 2K
+/云绘图 蓝色星空壁纸 --size 16:9 --quality 2K
+# 引用/附带 PNG、JPEG 或 WebP 原图后发送：
+/变手办
+/云绘图 保留人物脸部，换成冬日服装 --quality 2K
+```
+
+- `--size` 的宽高及原图宽高会转换到最接近的模型支持比例；清晰度由 `gemini_image_resolution` 或命令 `--quality 1K/2K/4K` 控制。**不是按任意指定像素输出，也不能保证与原图分辨率完全相同**。资料卡显示实际返回的图片宽高。
+- 本模式使用独立的 `gemini_image_model`，保留原来的 `openai_image_model` 供切回 GPT-Image 时使用；OpenAI 默认 `quality` 配置不参与 Gemini 请求，`response_format` 也不参与。
+- `--batch N` 会逐张调用，全部张数共享云绘图超时预算；后续失败会提示并发送已完成图片，不自动重试。生成多张或选择高分辨率可能增加费用与耗时。
+- 若接口明确返回 HTTP 400 `Aspect ratio is not enabled for this model`，`auto` 模式会只去掉被拒绝的 `aspectRatio`，将比例改为提示词描述后再尝试一次；本次加载期间记住此接口/模型的限制。`prompt` 模式从首次请求就省略比例字段，适合已知不支持该参数的渠道。这两种兼容行为无法保证精确输出比例；超时、限流、其他 400 或 5xx 不会触发自动重试。
+- 模型名以站点实际提供为准，名字中带 `image` 不代表上游一定支持生图；若兼容后仍没有最终图片，需检查站点模型映射。插件不会自动切换到其他模型。
+- 手办、毛绒、海报、UI 等预设继续可用；`daily_me_backend=cloud` 时，「二次元的我」也使用此渠道，保留每日一次、引用回复、资料卡与原图。
+- Sub2API 管理员需要允许对应分组绘图、放行模型，并保证上游账号有对应模型权限和额度。404 请检查站点地址和版本；403 请检查 Key、分组权限及模型白名单。
+- Antigravity 模式暂不提供 `/云绘图额度` 查询，请在 Sub2API 控制台查看。此次适配使用离线响应模拟验证，未调用用户的付费接口；实际可用模型以你的站点为准。
 
 ## 访问控制（白名单）
 

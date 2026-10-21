@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+*_config.json
+daily_me_usage.json
