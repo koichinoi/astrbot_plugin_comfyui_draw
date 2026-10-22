@@ -568,17 +568,15 @@ def test_daily_card_fills_render_canvas():
     assert ".card {\n    width: 900px;" not in template
 
 
-def test_chatgpt2api_profile():
-    obj = plugin({"openai_image_provider": "chatgpt2api"})
-    assert obj._openai_image_urls("http://127.0.0.1:3000") == [
-        "http://127.0.0.1:3000/v1/images/generations"
+def test_openai_url_candidates():
+    compat = plugin({"openai_image_provider": "openai-compatible"})
+    assert compat._openai_image_urls("http://127.0.0.1:3000") == [
+        "http://127.0.0.1:3000/images/generations"
     ]
-    assert obj._openai_image_urls("http://127.0.0.1:3000/v1") == [
-        "http://127.0.0.1:3000/v1/images/generations"
-    ]
-    endpoint = "http://127.0.0.1:3000/v1/images/generations"
-    assert obj._openai_image_urls(endpoint) == [endpoint]
-    assert obj._openai_image_response_format() == "b64_json"
+    assert compat._openai_image_response_format() == ""
+
+    legacy = plugin({"openai_image_provider": "chatgpt2api"})  # 已移除的类型回退到 auto
+    assert legacy._openai_image_provider() == "auto"
 
     auto = plugin({"openai_image_provider": "auto"})
     assert auto._openai_image_urls("http://127.0.0.1:3000") == [
@@ -659,7 +657,7 @@ async def main():
     await test_daily_me_card_reply_and_original()
     test_validation_and_multimodel_lora()
     test_daily_card_fills_render_canvas()
-    test_chatgpt2api_profile()
+    test_openai_url_candidates()
     await test_actual_workflows()
     print("optimized plugin core tests: OK")
 

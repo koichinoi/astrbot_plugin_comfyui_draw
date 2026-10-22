@@ -1176,7 +1176,6 @@ class ComfyUIDrawPlugin(Star):
                     {"cmd": "/绘图状态", "desc": "检查 ComfyUI 是否在线", "admin": False},
                     {"cmd": "/云绘图预设", "desc": "查看手办、头像、海报等云绘图快捷预设", "admin": False},
                     {"cmd": "/云绘图切换 [方案] [模型]", "desc": "查看云绘图方案；切换方案或模型仅限管理员", "admin": True},
-                    {"cmd": "/云绘图额度", "desc": "查看 ChatGPT2API 账号池剩余额度与状态", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
                     {"cmd": "/绘图主题 [主题名]", "desc": "查看帮助卡片主题；切换仅限管理员", "admin": True},
@@ -1404,67 +1403,8 @@ class ComfyUIDrawPlugin(Star):
             return
         yield event.plain_result(self._cloud_preset_text())
 
-    @filter.command(
-        "云绘图额度",
-        alias={"云额度", "绘图额度", "gpt额度", "cloudquota", "gptquota"},
-    )
-    async def cloud_draw_quota(self, event: AstrMessageEvent):
-        """查询 ChatGPT2API 账号池的剩余额度与运行统计。"""
-        if self.config.get("openai_quota_admin_only", True) and not self._is_admin(event):
-            yield event.plain_result("⛔ 仅 AstrBot 管理员可以查看云绘图接口额度。")
-            return
-        try:
-            payload, stats = await self._fetch_cloud_quota()
-        except asyncio.TimeoutError:
-            yield event.plain_result("❌ 查询云绘图额度超时，请检查接口地址和服务状态。")
-            return
-        except ComfyUIError as e:
-            yield event.plain_result(f"❌ 无法查询云绘图额度：{e}")
-            return
-        except Exception as e:  # noqa: BLE001
-            logger.exception("[comfyui_draw] 查询云绘图额度出错")
-            yield event.plain_result(
-                f"❌ 查询云绘图额度出错：{type(e).__name__}: {e}"
-            )
-            return
-
-        healthy = bool(payload.get("healthy")) or str(
-            payload.get("status", "") or ""
-        ).strip().lower() == "ok"
-        version = str(payload.get("version", "") or "").strip()
-
-        def shown(key):
-            value = stats.get(key)
-            if value is None or value == "":
-                return "未知"
-            if isinstance(value, float) and value.is_integer():
-                return str(int(value))
-            return str(value)
-
-        lines = [
-            "☁️ 云绘图接口额度",
-            f"状态：{'正常' if healthy else '异常'}" + (f" · v{version.lstrip('v')}" if version else ""),
-            f"当前账号：{shown('total')} · 可用：{shown('active')}",
-            f"剩余额度：{shown('total_quota')}（账号池合计）",
-            (
-                f"限流：{shown('limited')} · 异常：{shown('abnormal')}"
-                f" · 禁用：{shown('disabled')}"
-            ),
-            f"累计成功：{shown('total_success')} · 失败：{shown('total_fail')}",
-        ]
-        by_type = stats.get("by_type")
-        if isinstance(by_type, dict) and by_type:
-            type_text = " · ".join(
-                f"{name} × {count}"
-                for name, count in sorted(by_type.items(), key=lambda item: str(item[0]))
-            )
-            lines.append(f"账号类型：{type_text}")
-        lines.append("说明：这是 ChatGPT2API 账号池额度，不是官方 API 账单余额。")
-        yield event.plain_result("\n".join(lines))
-
     CLOUD_PROVIDER_LABELS = {
         "auto": "OpenAI 兼容（自动）",
-        "chatgpt2api": "ChatGPT2API",
         "openai-compatible": "OpenAI 兼容",
         "sub2api-antigravity": "Antigravity/Gemini",
     }
@@ -1713,7 +1653,7 @@ class ComfyUIDrawPlugin(Star):
                 size_str = size_str.replace(sep, "x")
         n = self._clamp_batch(self._to_int(opts.get("batch"), 1))
         if source_images:
-            # ChatGPT2API 的图片编辑接口限制 n 为 1–4。
+            # 图片编辑接口一般限制 n 为 1–4。
             n = min(n, 4)
         quality = (opts.get("quality") or "").strip() or str(self.config.get("openai_image_quality", "") or "").strip() or None
         style = (opts.get("style") or "").strip() or str(self.config.get("openai_image_style", "") or "").strip() or None
@@ -1842,7 +1782,7 @@ class ComfyUIDrawPlugin(Star):
     # 云绘图方案：cloud_profiles 中的命名方案可覆盖顶层的地址 / Key / 模型，
     # active_cloud_profile 为空时使用顶层配置（即「默认」方案）。
     # ------------------------------------------------------------------ #
-    CLOUD_PROVIDERS = ("auto", "chatgpt2api", "openai-compatible", "sub2api-antigravity")
+    CLOUD_PROVIDERS = ("auto", "openai-compatible", "sub2api-antigravity")
     DEFAULT_CLOUD_PROFILE = "默认"
     # 每种接口类型的专属 Key；留空时沿用通用的 openai_image_api_key。
     CLOUD_PROVIDER_KEY_FIELDS = {
@@ -2247,68 +2187,6 @@ class ComfyUIDrawPlugin(Star):
             error.partial_results = results
             raise error from None
 
-    @staticmethod
-    def _openai_project_root(base: str) -> str:
-        """从根地址、/v1 或完整图片接口地址还原项目根地址。"""
-        root = str(base or "").strip().split("?", 1)[0].rstrip("/")
-        for suffix in ("/images/generations", "/images/edits"):
-            if root.lower().endswith(suffix):
-                root = root[: -len(suffix)].rstrip("/")
-                break
-        if root.lower().endswith("/v1"):
-            root = root[:-3].rstrip("/")
-        return root
-
-    async def _fetch_cloud_quota(self):
-        """读取 ChatGPT2API 的公开健康信息与账号池额度统计。"""
-        if self._openai_image_provider() == "sub2api-antigravity":
-            raise ComfyUIError("Antigravity 模式暂不支持 /云绘图额度，请在 Sub2API 控制台查看余额与分组额度。")
-        conn = self._cloud_connection()
-        base = conn["base_url"]
-        if not base:
-            raise ComfyUIError(
-                "未配置云端绘图地址，请先填写 openai_image_base_url"
-                + self._cloud_profile_hint(conn) + "。"
-            )
-        root = self._openai_project_root(base)
-        if not root:
-            raise ComfyUIError("云端绘图地址格式不正确。")
-        url = root + "/health?format=json"
-        timeout = aiohttp.ClientTimeout(
-            total=min(self._config_int("openai_image_timeout", 180, 1, 3600), 15)
-        )
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url) as resp:
-                    raw = await self._read_limited(
-                        resp, 1024 * 1024, "云绘图额度响应"
-                    )
-                    status = resp.status
-        except asyncio.TimeoutError:
-            raise
-        except ComfyUIError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            raise ComfyUIError(f"无法连接额度接口（{url}）：{e}")
-
-        if status != 200:
-            raise ComfyUIError(
-                f"接口返回 HTTP {status}；当前服务可能不是 ChatGPT2API，"
-                "或版本不支持 /health?format=json。"
-            )
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise ComfyUIError(
-                "接口没有返回有效的额度 JSON；请确认填写的是 ChatGPT2API 项目地址。"
-            )
-        stats = payload.get("accounts") if isinstance(payload, dict) else None
-        if not isinstance(stats, dict):
-            raise ComfyUIError(
-                "响应中没有账号池额度信息；当前接口版本可能不支持额度查询。"
-            )
-        return payload, stats
-
     def _openai_image_urls(self, base: str) -> list[str]:
         """按接口类型生成候选地址，并避免重复拼接接口路径。"""
         base = str(base or "").strip().rstrip("/")
@@ -2320,10 +2198,7 @@ class ComfyUIDrawPlugin(Star):
             return [direct_url]
 
         v1_url = base + "/v1/images/generations"
-        provider = self._openai_image_provider()
-        if provider == "chatgpt2api":
-            return [v1_url]
-        if provider == "auto":
+        if self._openai_image_provider() == "auto":
             return [direct_url, v1_url]
         return [direct_url]
 
@@ -2340,10 +2215,7 @@ class ComfyUIDrawPlugin(Star):
             return [direct_url]
 
         v1_url = base + "/v1/images/edits"
-        provider = self._openai_image_provider()
-        if provider == "chatgpt2api":
-            return [v1_url]
-        if provider == "auto":
+        if self._openai_image_provider() == "auto":
             return [direct_url, v1_url]
         return [direct_url]
 
@@ -2355,11 +2227,7 @@ class ComfyUIDrawPlugin(Star):
             raise ComfyUIError(
                 "云端绘图 response_format 只能是 url 或 b64_json。"
             )
-        if value:
-            return value
-        if self._openai_image_provider() == "chatgpt2api":
-            return "b64_json"
-        return ""
+        return value
 
     async def _run_openai_image(self, prompt: str, size: str = None, n: int = 1,
                                 quality: str = None, style: str = None):
@@ -2392,8 +2260,6 @@ class ComfyUIDrawPlugin(Star):
         rf = self._openai_image_response_format()
         if rf:
             body["response_format"] = rf
-        if self._openai_image_provider() == "chatgpt2api":
-            body["history_disabled"] = True
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         timeout = aiohttp.ClientTimeout(
             total=self._config_int("openai_image_timeout", 180, 1, 3600)
@@ -3587,7 +3453,6 @@ class ComfyUIDrawPlugin(Star):
             "/云绘图预设             查看手办、头像、海报等快捷预设\n"
             "/云绘图切换 [方案] [模型]  查看 / 切换云绘图接口方案（切换仅管理员）\n"
             "/云绘图模型 [模型名]    查看 / 修改当前方案的模型（修改仅管理员）\n"
-            "/云绘图额度             查看 ChatGPT2API 账号池额度（默认仅管理员）\n"
             "/绘图列表              查看可用工作流（别名 drawlist）\n"
             "/绘图状态              检查 ComfyUI 是否在线（别名 drawstatus）\n"
             "/绘图默认 [工作流名]    查看 / 切换默认工作流（别名 drawdefault）\n"

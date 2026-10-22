@@ -268,8 +268,6 @@ class RequestTests(unittest.IsolatedAsyncioTestCase):
                     await obj._run_openai_image_edit("cat", sources)
             with self.assertRaises(PluginError):
                 await configured()._run_openai_image_edit("cat", [])
-            with self.assertRaisesRegex(PluginError, "控制台"):
-                await configured()._fetch_cloud_quota()
         self.assertEqual(session.calls, [])
 
     async def render(self, obj, sources=(), **kwargs):

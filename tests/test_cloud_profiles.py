@@ -43,14 +43,14 @@ def profiled(**overrides):
         "gemini_image_model": "gemini-3.1-flash-image",
         "show_progress": False,
         "cloud_profiles": [
-            {"name": "GPT", "provider": "chatgpt2api", "base_url": "https://gpt.example",
+            {"name": "GPT", "provider": "openai-compatible", "base_url": "https://gpt.example",
              "api_key": GPT_KEY, "model": ""},
             {"name": "Gemini", "provider": "sub2api-antigravity", "base_url": "https://sub2.example",
              "api_key": GEMINI_KEY, "model": "gemini-3-pro-image"},
             {"name": "SameSite", "provider": "openai-compatible", "base_url": "", "api_key": "",
              "model": "other-image-model"},
-            {"name": "默认", "provider": "chatgpt2api"},
-            {"name": "", "provider": "chatgpt2api"},
+            {"name": "默认", "provider": "openai-compatible"},
+            {"name": "", "provider": "openai-compatible"},
         ],
         **overrides,
     })
@@ -74,9 +74,9 @@ class ProfileResolutionTests(unittest.TestCase):
         obj = profiled(active_cloud_profile="GPT")
         conn = obj._cloud_connection()
         self.assertEqual((conn["provider"], conn["base_url"], conn["api_key"]),
-                         ("chatgpt2api", "https://gpt.example", GPT_KEY))
+                         ("openai-compatible", "https://gpt.example", GPT_KEY))
         self.assertEqual(conn["model"], "gpt-image-2")  # 留空沿用顶层 OpenAI 模型
-        self.assertEqual(obj._openai_image_provider(), "chatgpt2api")
+        self.assertEqual(obj._openai_image_provider(), "openai-compatible")
 
         gemini = obj._cloud_connection("Gemini")
         self.assertEqual((gemini["provider"], gemini["model"]),
@@ -90,9 +90,9 @@ class ProfileResolutionTests(unittest.TestCase):
     def test_provider_specific_top_level_keys(self):
         obj = profiled(sub2api_antigravity_api_key="sub2-key-not-real")
         self.assertEqual(obj._cloud_connection()["api_key"], "default-key-not-real")  # auto 用通用 Key
-        obj.config["openai_image_provider"] = "chatgpt2api"  # chatgpt2api 没有专属 Key
+        obj.config["openai_image_provider"] = "chatgpt2api"  # 已移除的类型回退到 auto，用通用 Key
         conn = obj._cloud_connection()
-        self.assertEqual(conn["api_key"], "default-key-not-real")
+        self.assertEqual(conn["provider"], "auto")
         self.assertEqual(conn["api_key_field"], "openai_image_api_key")
         obj.config["openai_image_provider"] = "sub2api-antigravity"
         self.assertEqual(obj._cloud_connection()["api_key"], "sub2-key-not-real")
@@ -139,10 +139,10 @@ class ProfileRequestTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(module.aiohttp, "ClientSession", return_value=session, create=True):
             await profiled(active_cloud_profile="GPT")._run_openai_image("cat")
         url, kwargs = session.calls[0]
-        self.assertEqual(url, "https://gpt.example/v1/images/generations")
+        self.assertEqual(url, "https://gpt.example/images/generations")
         self.assertEqual(kwargs["headers"]["Authorization"], f"Bearer {GPT_KEY}")
         self.assertEqual(kwargs["json"]["model"], "gpt-image-2")
-        self.assertTrue(kwargs["json"]["history_disabled"])
+        self.assertNotIn("history_disabled", kwargs["json"])
 
     async def test_switch_to_gemini_profile_uses_antigravity(self):
         session = Session([Response(200, payload={"candidates": [{"content": {"parts": [
