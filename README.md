@@ -57,7 +57,7 @@ AstrBot/
 | `auto_randomize_seed` | 每次自动随机种子（默认开）。 |
 | `max_concurrent_tasks` | 最大并发生成任务数。 |
 | `timeout` | 单次生成超时（秒）。 |
-| `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）或 `神社`（朱红和纸、鸟居与注连绳）。可用 `/绘图主题` 在线切换。 |
+| `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱）。可用 `/绘图主题` 在线切换。 |
 | `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
 | `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。 |
 | `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api`、`openai-compatible` 或 `sub2api-antigravity`。 |
@@ -165,7 +165,7 @@ AstrBot/
 | `/云绘图额度` | 查看 ChatGPT2API 账号池的剩余额度与运行状态，默认仅管理员 | `/云额度`、`/绘图额度`、`/gptquota` |
 | `/绘图列表` | 查看可用工作流 | `/drawlist`、`/comfyui_list` |
 | `/绘图状态` | 检查 ComfyUI 是否在线 | `/drawstatus`、`/comfystatus` |
-| `/绘图主题` | 查看帮助卡片主题；仅管理员可切换（默认 / 神社），全局生效 | `/帮助主题`、`/drawtheme` |
+| `/绘图主题` | 查看帮助卡片主题；仅管理员可切换（默认 / 神社 / 博丽灵梦），全局生效 | `/帮助主题`、`/drawtheme` |
 | `/绘图默认` | 所有人可查看；仅管理员可切换默认工作流并持久保存 | `/drawdefault`、`/setdefault` |
 | `/绘图帮助` | 查看完整使用帮助（含当前可用工作流） | `/drawhelp`、`/comfyhelp` |
 

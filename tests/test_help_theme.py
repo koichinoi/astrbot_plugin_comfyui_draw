@@ -49,6 +49,21 @@ class HelpThemeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("绘马堂", html)
         self.assertIn("/绘图主题 [主题名]", html)
 
+    async def test_reimu_template_renders_all_help_data(self):
+        import jinja2
+
+        obj, rendered = themed(help_card_theme="博丽灵梦")
+        await obj._render_draw_help()
+        self.assertIs(rendered["template"], templates.REIMU_HELP_TMPL)
+        html = jinja2.Template(rendered["template"]).render(**rendered["data"])
+        for group in rendered["data"]["groups"]:
+            for item in group["items"]:
+                self.assertIn(item["cmd"], html)
+        for example in rendered["data"]["examples"]:
+            self.assertIn(example, html)
+        self.assertIn("博丽神社", html)
+        self.assertIn("/绘图主题 [主题名]", html)
+
     async def test_command_view_and_permissions(self):
         obj, _ = themed()
         view = await run(obj.help_theme(with_message(Event, "/绘图主题")))
