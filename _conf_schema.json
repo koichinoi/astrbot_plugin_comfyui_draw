@@ -311,13 +311,7 @@
   "openai_image_api_key": {
     "type": "string",
     "description": "云端绘图 API Key",
-    "hint": "通用密钥，会作为 Bearer Token 发送。下方对应接口类型的专属 Key 留空时才使用它（auto 模式始终使用它）。注意：这种接口是按量付费的，调用会消耗你的额度。",
-    "default": ""
-  },
-  "chatgpt2api_api_key": {
-    "type": "string",
-    "description": "ChatGPT2API 专属 API Key",
-    "hint": "接口类型为 chatgpt2api 时使用，填 ChatGPT2API 的 auth-key。留空则沿用上面的通用 API Key。",
+    "hint": "通用密钥，会作为 Bearer Token 发送。auto 和 chatgpt2api 模式始终使用它；其他接口类型的专属 Key 留空时也使用它。注意：这种接口是按量付费的，调用会消耗你的额度。",
     "default": ""
   },
   "openai_compatible_api_key": {

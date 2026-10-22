@@ -1846,7 +1846,6 @@ class ComfyUIDrawPlugin(Star):
     DEFAULT_CLOUD_PROFILE = "默认"
     # 每种接口类型的专属 Key；留空时沿用通用的 openai_image_api_key。
     CLOUD_PROVIDER_KEY_FIELDS = {
-        "chatgpt2api": "chatgpt2api_api_key",
         "openai-compatible": "openai_compatible_api_key",
         "sub2api-antigravity": "sub2api_antigravity_api_key",
     }

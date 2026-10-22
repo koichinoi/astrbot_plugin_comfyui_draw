@@ -63,8 +63,8 @@ AstrBot/
 | `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api`、`openai-compatible` 或 `sub2api-antigravity`。 |
 | `openai_image_base_url` | 云端绘图接口基址。ChatGPT2API 可直接填项目根地址，插件会自动补文生图 `/v1/images/generations` 或图片编辑 `/v1/images/edits`。默认留空。 |
 | `openai_quota_admin_only` | `/云绘图额度` 是否仅限 AstrBot 管理员使用，默认开启。 |
-| `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。对应接口类型的专属 Key 留空时使用；`auto` 模式始终使用它。**按量付费，调用会消耗额度。** |
-| `chatgpt2api_api_key` / `openai_compatible_api_key` / `sub2api_antigravity_api_key` | 各接口类型的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
+| `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。`auto` 和 `chatgpt2api` 模式始终使用它；其他接口类型的专属 Key 留空时也使用它。**按量付费，调用会消耗额度。** |
+| `openai_compatible_api_key` / `sub2api_antigravity_api_key` | OpenAI 兼容和 Sub2API Antigravity 的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
 | `openai_image_model` | 云端绘图模型名，如 `gpt-image-2`。 |
 | `cloud_default_art_style` | 云绘图默认美术风格，默认日系二次元插画。普通 `/云绘图` 未使用预设或 `--style` 时追加到提示词；描述中写明其他画风时以描述为准，清空则不追加。 |
 | `openai_image_size` | 云端文生图默认尺寸；GPT-Image 2 还支持符合限制的自定义宽高。 |
@@ -275,7 +275,7 @@ AstrBot/
 
 1. 把 `openai_image_provider` 设为 `chatgpt2api`。
 2. `openai_image_base_url` 填项目地址，例如 `http://127.0.0.1:3000`；填成 `http://127.0.0.1:3000/v1` 也可以。
-3. `chatgpt2api_api_key` 填 ChatGPT2API 配置里的 `auth-key`（留空则使用 `openai_image_api_key`）。
+3. `openai_image_api_key` 填 ChatGPT2API 配置里的 `auth-key`。
 4. 模型可填 `gpt-image-2` 或 `codex-gpt-image-2`；`response_format` 留空即可，插件会默认请求 `b64_json`。
 
 文生图使用 `/v1/images/generations`，引用/附带原图时使用 multipart 格式的 `/v1/images/edits`。插件也支持把接口类型留在 `auto`：根路径返回 404/405 时，会自动改试对应的 `/v1` 路径。ChatGPT2API 属于非官方逆向项目，请遵守该项目说明，只在你有权使用的账号和环境中部署。
