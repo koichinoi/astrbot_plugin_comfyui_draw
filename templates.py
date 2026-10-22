@@ -868,6 +868,82 @@ REIMU_INFO_CARD_TMPL = """
 """
 
 
+# 博丽灵梦风格的小提示卡：把普通文字回复（报错、权限、切换结果、用法等）渲染成图片。
+# 数据：kind（ok / error / warn / info）, label, lines=[...], illust（可选 data URI）
+REIMU_NOTICE_CARD_TMPL = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;
+    background: #fbefee;
+  }
+  .serif { font-family: "Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif; }
+  .card {
+    width: 540px; zoom: {{ scale | default(2) }}; position: relative; overflow: hidden; color: #4d3336;
+    background: linear-gradient(180deg, #fffaf8 0%, #fdf3f1 100%);
+    border-top: 10px solid #c8283a;
+  }
+  .card.error { border-top-color: #9e1b2a; }
+  .card.warn { border-top-color: #d89a1c; }
+  .frill {
+    height: 12px;
+    background: radial-gradient(circle at 10px 0, #c8283a 0 8px, transparent 9px) 0 0 / 20px 12px repeat-x;
+  }
+  .card.error .frill { background-image: radial-gradient(circle at 10px 0, #9e1b2a 0 8px, transparent 9px); }
+  .card.warn .frill { background-image: radial-gradient(circle at 10px 0, #d89a1c 0 8px, transparent 9px); }
+  .main { display: flex; gap: 16px; align-items: flex-start; padding: 8px 22px 16px 18px; }
+  .avatar {
+    flex-shrink: 0; width: 76px; height: 76px; border-radius: 50%; object-fit: cover;
+    border: 3px solid #ffffff; box-shadow: 0 3px 10px rgba(150,40,50,0.22); background: #fffaf8;
+  }
+  .orb { flex-shrink: 0; width: 60px; height: 60px; margin: 6px 8px 0 8px; filter: drop-shadow(0 3px 4px rgba(90,10,20,0.25)); }
+  .content { flex: 1; min-width: 0; padding-top: 4px; }
+  .label {
+    display: inline-block; font-size: 12px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px;
+    padding: 2px 8px; border-radius: 2px; color: #c4202f; background: #fffaf0;
+    border: 1.5px solid #d6303f; outline: 1px solid #fffaf0; transform: rotate(-3deg);
+  }
+  .card.error .label { color: #ffffff; background: #9e1b2a; border-color: #9e1b2a; }
+  .card.warn .label { color: #8a5a00; background: #fff5dc; border-color: #d89a1c; }
+  .line { font-size: 14px; line-height: 1.65; color: #4d3336; white-space: pre-wrap; word-break: break-all; }
+  .line.first { font-size: 15px; font-weight: 700; color: #a91d2c; }
+  .card.error .line.first { color: #8e1424; }
+  .card.warn .line.first { color: #8a5a00; }
+  .line.blank { height: 8px; }
+  .sign { text-align: right; font-size: 11px; color: #c49a9e; letter-spacing: 2px; padding: 0 16px 10px 0; }
+</style>
+</head>
+<body>
+<div class="card {{ kind | default('info') | e }}">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="yy" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="47" fill="#ffffff" stroke="#9e1b2a" stroke-width="4"/>
+        <path d="M50 3 A47 47 0 0 1 50 97 A23.5 23.5 0 0 1 50 50 A23.5 23.5 0 0 0 50 3 Z" fill="#d6303f"/>
+        <circle cx="50" cy="26.5" r="7" fill="#d6303f"/>
+        <circle cx="50" cy="73.5" r="7" fill="#ffffff"/>
+      </symbol>
+    </defs>
+  </svg>
+  <div class="frill"></div>
+  <div class="main">
+    {% if illust %}<img class="avatar" src="{{ illust }}"/>{% else %}<svg class="orb" aria-hidden="true"><use href="#yy"/></svg>{% endif %}
+    <div class="content">
+      <div class="label serif">{{ label | e }}</div>
+      {% for l in lines %}{% if l %}<div class="line{% if loop.first %} first{% endif %}">{{ l | e }}</div>{% else %}<div class="line blank"></div>{% endif %}{% endfor %}
+    </div>
+  </div>
+  <div class="sign serif">—— 博丽神社</div>
+</div>
+</body>
+</html>
+"""
+
+
 # 帮助卡片可选主题：名称 -> (模板, 一句话说明)。第一个为默认主题。
 HELP_CARD_THEMES = {
     "默认": (DRAW_HELP_TMPL, "淡紫蓝画室风格"),

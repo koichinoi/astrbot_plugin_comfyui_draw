@@ -23,6 +23,7 @@ from .templates import (
     DEFAULT_WORKFLOW,
     HELP_CARD_THEMES,
     REIMU_INFO_CARD_TMPL,
+    REIMU_NOTICE_CARD_TMPL,
 )
 
 ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -134,16 +135,16 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(event.message_str, {"绘图", "draw", "comfyui", "comfy"})
         if not raw:
-            yield event.plain_result(self._usage())
+            yield await self._text_result(event, self._usage())
             return
 
         prompt, opts = self._parse_args(raw)
         if not prompt:
-            yield event.plain_result("请提供提示词。例如：/绘图 a cute cat, masterpiece")
+            yield await self._text_result(event, "请提供提示词。例如：/绘图 a cute cat, masterpiece")
             return
 
         async for result in self._render(event, prompt, opts):
@@ -168,7 +169,7 @@ class ComfyUIDrawPlugin(Star):
         try:
             opts = self._normalize_options(prompt, opts, cloud=False)
         except ComfyUIError as e:
-            yield event.plain_result(f"❌ 参数错误：{e}")
+            yield await self._text_result(event, f"❌ 参数错误：{e}")
             return
 
         # 选择工作流（-w 指定 / 配置的默认工作流名 / 内置默认）
@@ -180,7 +181,7 @@ class ComfyUIDrawPlugin(Star):
         prompt = await self._maybe_translate_draw_prompt(event, prompt, effective_wf_name)
         wf_template = self._resolve_workflow(wf_name)
         if wf_template is None:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 f"找不到名为「{wf_name}」的工作流。可用：{', '.join(self._workflow_names())}"
             )
             return
@@ -189,14 +190,14 @@ class ComfyUIDrawPlugin(Star):
         try:
             workflow = json.loads(wf_template)
         except Exception as e:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 "工作流 JSON 解析失败。请确认它是 ComfyUI 导出的「API 格式」。"
                 "（含占位符的工作流，占位符需用引号包裹，例如 \"%seed%\"）\n错误：" + str(e)
             )
             return
         fmt_err = self._format_problem(workflow)
         if fmt_err:
-            yield event.plain_result(fmt_err)
+            yield await self._text_result(event, fmt_err)
             return
 
         # 种子
@@ -254,13 +255,13 @@ class ComfyUIDrawPlugin(Star):
                 effective["loras"] = loras
             self._enforce_effective_limits(effective)
         except ComfyUIError as e:
-            yield event.plain_result(f"❌ {e}")
+            yield await self._text_result(event, f"❌ {e}")
             return
 
         # 输入图片（图生图 / 图生视频）：工作流含 LoadImage 时，从消息里取图并上传注入
         img_err = await self._apply_input_images(event, workflow, seed_value)
         if img_err:
-            yield event.plain_result(img_err)
+            yield await self._text_result(event, img_err)
             return
 
         self._sweep_temp()
@@ -289,7 +290,7 @@ class ComfyUIDrawPlugin(Star):
             await self._recall_progress_message(event, progress_message_id)
 
         if generation_error:
-            yield event.plain_result(generation_error)
+            yield await self._text_result(event, generation_error)
             return
 
         chain = await self._build_result_chain(
@@ -396,6 +397,35 @@ class ComfyUIDrawPlugin(Star):
                 pass
             cls._asset_uri_cache[filename] = uri
         return cls._asset_uri_cache[filename]
+
+    NOTICE_KINDS = (
+        ("✅", "ok", "完成"),
+        ("❌", "error", "出错了"),
+        ("⚠️", "warn", "注意"),
+    )
+
+    @classmethod
+    def _notice_card_data(cls, text):
+        """按开头的 ✅ / ❌ / ⚠️ 判断提示类型，并去掉这个前缀（卡片上用标签表示）。"""
+        body = str(text or "").strip()
+        kind, label = "info", "巫女的提示"
+        for prefix, k, l in cls.NOTICE_KINDS:
+            if body.startswith(prefix):
+                kind, label, body = k, l, body[len(prefix):].lstrip()
+                break
+        return {"kind": kind, "label": label, "lines": [line.rstrip() for line in body.splitlines()]}
+
+    async def _text_result(self, event, text):
+        """普通文字回复：开启 text_as_card 时渲染成博丽灵梦提示卡，否则或渲染失败时直接发文字。"""
+        if self.config.get("text_as_card", True) and str(text or "").strip():
+            data = {"scale": 2, "illust": self._asset_data_uri("reimu_avatar.jpg"), **self._notice_card_data(text)}
+            try:
+                rendered = await self.html_render(REIMU_NOTICE_CARD_TMPL, data)
+                if rendered:
+                    return event.image_result(rendered)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[comfyui_draw] 提示卡片渲染失败，改用文字：{e}")
+        return event.plain_result(text)
 
     async def _info_card_result(self, event, card, fallback_text):
         """把信息渲染成博丽灵梦风格卡片；渲染失败时退回文字。"""
@@ -1048,14 +1078,14 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         if not self.config.get("daily_me_enabled", True):
-            yield event.plain_result("「二次元的我」功能未开启（配置 daily_me_enabled）。")
+            yield await self._text_result(event, "「二次元的我」功能未开启（配置 daily_me_enabled）。")
             return
         uid = self._daily_me_uid(event)
         if not await self._daily_me_reserve(uid):
-            yield event.plain_result("你今天已经抽过「二次元的我」啦～ 每人每天一次，明天再来！")
+            yield await self._text_result(event, "你今天已经抽过「二次元的我」啦～ 每人每天一次，明天再来！")
             return
         state = {"success": False}
         try:
@@ -1086,7 +1116,7 @@ class ComfyUIDrawPlugin(Star):
 
             wf_name = str(self.config.get("daily_me_workflow", "小叶子") or "小叶子").strip()
             if self._resolve_named(wf_name) is None:
-                yield event.plain_result(
+                yield await self._text_result(event, 
                     f"「二次元的我」需要工作流「{wf_name}」，但没有找到。可用：{', '.join(self._workflow_names())}\n"
                     f"（可在配置 daily_me_workflow 中修改）")
                 return
@@ -1111,14 +1141,14 @@ class ComfyUIDrawPlugin(Star):
     async def daily_me_reset(self, event: AstrMessageEvent):
         """（管理员）清空今天的「二次元的我」使用记录，让大家可以重抽。"""
         if not self._is_admin(event):
-            yield event.plain_result("只有管理员能重置「二次元的我」记录。")
+            yield await self._text_result(event, "只有管理员能重置「二次元的我」记录。")
             return
         self._daily_me_roll_date()
         n = len(self._daily_me["used"])
         self._daily_me["used"] = {}
         self._daily_me_pending.clear()
         self._daily_me_save()
-        yield event.plain_result(f"🧹 已清空今日「二次元的我」使用记录（{n} 人），大家可以重新抽了。")
+        yield await self._text_result(event, f"🧹 已清空今日「二次元的我」使用记录（{n} 人），大家可以重新抽了。")
 
     @filter.command("绘图列表", alias={"drawlist", "comfyui_list"})
     async def draw_list(self, event: AstrMessageEvent):
@@ -1281,7 +1311,7 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         name = self._strip_command(event.message_str, {"绘图主题", "帮助主题", "drawtheme"}).strip()
         current = self._help_card_theme()
@@ -1302,19 +1332,19 @@ class ComfyUIDrawPlugin(Star):
             }, "\n".join(lines))
             return
         if not self._is_admin(event):
-            yield event.plain_result("只有管理员能切换帮助卡片主题。")
+            yield await self._text_result(event, "只有管理员能切换帮助卡片主题。")
             return
         if name not in HELP_CARD_THEMES:
-            yield event.plain_result(f"没有「{name}」主题。可选：{'、'.join(HELP_CARD_THEMES)}")
+            yield await self._text_result(event, f"没有「{name}」主题。可选：{'、'.join(HELP_CARD_THEMES)}")
             return
         if name == current:
-            yield event.plain_result(f"帮助卡片已经是「{name}」主题了。")
+            yield await self._text_result(event, f"帮助卡片已经是「{name}」主题了。")
             return
         self.config["help_card_theme"] = name
         text = f"✅ 帮助卡片已切换为「{name}」主题，发送 /绘图帮助 查看效果。"
         if not self._save_config():
             text += "\n⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。"
-        yield event.plain_result(text)
+        yield await self._text_result(event, text)
 
     @filter.command("绘图默认", alias={"drawdefault", "setdefault", "comfyui_default"})
     async def set_default(self, event: AstrMessageEvent):
@@ -1322,7 +1352,7 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(event.message_str,
                                   {"绘图默认", "drawdefault", "setdefault", "comfyui_default"})
@@ -1334,7 +1364,7 @@ class ComfyUIDrawPlugin(Star):
         if not name:
             cur_disp = current if current else "内置 / 配置的 default_workflow"
             opts_disp = "、".join(selectable + ["默认"]) if selectable else "默认"
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 f"当前默认工作流：{cur_disp}\n"
                 f"可切换为：{opts_disp}\n"
                 "用法：/绘图默认 <工作流名>（填「默认」可恢复为内置 / 配置默认）"
@@ -1343,38 +1373,38 @@ class ComfyUIDrawPlugin(Star):
 
         # 修改的是全局持久化配置，必须限制为管理员；访问白名单只代表可以出图。
         if not self._is_admin(event):
-            yield event.plain_result("只有管理员能切换全局默认工作流。")
+            yield await self._text_result(event, "只有管理员能切换全局默认工作流。")
             return
 
         # 恢复为内置 / 配置默认
         if name in ("默认", "default", "重置", "reset", "内置"):
             if not current:
-                yield event.plain_result("当前已经是内置 / 配置默认，无需切换。")
+                yield await self._text_result(event, "当前已经是内置 / 配置默认，无需切换。")
                 return
             self.config["default_workflow_name"] = ""
             ok = self._save_config()
             tail = "" if ok else (
                 "\n⚠️ 但写回配置文件失败，重启 / 重载后可能恢复原值；"
                 "请到插件配置面板手动清空 default_workflow_name。")
-            yield event.plain_result("✅ 默认工作流已恢复为：内置 / 配置的 default_workflow。" + tail)
+            yield await self._text_result(event, "✅ 默认工作流已恢复为：内置 / 配置的 default_workflow。" + tail)
             return
 
         # 校验名称是否为已知的命名工作流
         if name not in selectable:
             avail = "、".join(selectable) if selectable else \
                 "（暂无命名工作流，请先在配置里设置 workflow_dir 或 extra_workflows）"
-            yield event.plain_result(f"找不到工作流「{name}」。可选：{avail}")
+            yield await self._text_result(event, f"找不到工作流「{name}」。可选：{avail}")
             return
 
         if name == current:
-            yield event.plain_result(f"当前默认已经是「{name}」，无需切换。")
+            yield await self._text_result(event, f"当前默认已经是「{name}」，无需切换。")
             return
 
         self.config["default_workflow_name"] = name
         if self._save_config():
-            yield event.plain_result(f"✅ 默认工作流已切换为「{name}」。之后不带 -w 的 /绘图 都会用它。")
+            yield await self._text_result(event, f"✅ 默认工作流已切换为「{name}」。之后不带 -w 的 /绘图 都会用它。")
         else:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 f"已临时切换默认为「{name}」，但写回配置文件失败，重启 / 重载后可能丢失。\n"
                 f"请到插件配置面板把 default_workflow_name 手动设为 {name} 并保存。")
 
@@ -1391,11 +1421,11 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         p = (prompt or "").strip()
         if not p:
-            yield event.plain_result("（绘图）没有收到提示词，请告诉我要画什么。")
+            yield await self._text_result(event, "（绘图）没有收到提示词，请告诉我要画什么。")
             return
         wf = (workflow or "").strip()
         # LLM 可能给出不存在的画风名，这时回退到默认而不是报错
@@ -1417,12 +1447,12 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(event.message_str,
                                   {"云绘图", "gptdraw", "gptimage", "clouddraw", "gpt绘图"})
         if not raw:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 "用法：/云绘图 <提示词> [--手办|--头像|--海报等] [--size 1024x1024] [--batch N]\n"
                 "GPT-Image / DALL·E 用自然语言描述即可（支持中文）。size / quality / style 的可选值以你所用接口的文档为准；"
                 "一次张数上限跟随 max_batch_size 配置。发送 /云绘图预设 可查看所有快捷预设。\n"
@@ -1431,7 +1461,7 @@ class ComfyUIDrawPlugin(Star):
             return
         prompt, opts = self._parse_args(raw, cloud=True)
         if not prompt and not opts.get("preset"):
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 "请提供提示词。例如：/云绘图 一只戴帽子的柴犬，水彩风\n"
                 "也可以引用一张原图发送：/变手办"
             )
@@ -1445,7 +1475,7 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(event.message_str, {"变手办", "手办化", "figureme"})
         prompt, opts = self._parse_args(raw, cloud=True)
@@ -1537,7 +1567,7 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(
             event.message_str, {"云绘图切换", "云切换", "切换云绘图", "cloudswitch"}
@@ -1549,22 +1579,22 @@ class ComfyUIDrawPlugin(Star):
             )
             return
         if not self._is_admin(event):
-            yield event.plain_result("只有管理员能切换全局云绘图方案。")
+            yield await self._text_result(event, "只有管理员能切换全局云绘图方案。")
             return
         if len(args) > 2:
-            yield event.plain_result("用法：/云绘图切换 <方案名> [模型名]（方案名和模型名中不能有空格）")
+            yield await self._text_result(event, "用法：/云绘图切换 <方案名> [模型名]（方案名和模型名中不能有空格）")
             return
 
         target = self._match_cloud_profile(args[0])
         if target is None:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 f"找不到云绘图方案「{args[0]}」。可选：{'、'.join(self._cloud_profile_names())}\n"
                 "新方案请在插件配置 cloud_profiles 中添加。"
             )
             return
         model = args[1] if len(args) > 1 else None
         if model is not None and not self._valid_model_name(model):
-            yield event.plain_result("模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
+            yield await self._text_result(event, "模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
             return
 
         self.config["active_cloud_profile"] = (
@@ -1579,7 +1609,7 @@ class ComfyUIDrawPlugin(Star):
             lines.append("⚠️ 这个方案还缺少地址或 Key，出图前请在插件配置里补填。")
         if not saved:
             lines.append("⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。")
-        yield event.plain_result("\n".join(lines))
+        yield await self._text_result(event, "\n".join(lines))
 
     @filter.command("云绘图模型", alias={"云模型", "cloudmodel"})
     async def cloud_model(self, event: AstrMessageEvent):
@@ -1587,22 +1617,22 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         raw = self._strip_command(event.message_str, {"云绘图模型", "云模型", "cloudmodel"})
         args = raw.split()
         conn = self._cloud_connection()
         if not args:
-            yield event.plain_result(
+            yield await self._text_result(event, 
                 f"当前云绘图方案「{conn['name']}」：{self._describe_cloud_connection(conn)}\n"
                 "用法：/云绘图模型 <模型名>（仅管理员）"
             )
             return
         if not self._is_admin(event):
-            yield event.plain_result("只有管理员能修改云绘图模型。")
+            yield await self._text_result(event, "只有管理员能修改云绘图模型。")
             return
         if len(args) != 1 or not self._valid_model_name(args[0]):
-            yield event.plain_result("模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
+            yield await self._text_result(event, "模型名只能包含字母、数字和 . _ - : / @，且不超过 200 个字符。")
             return
         self._set_cloud_model(conn["name"], args[0])
         saved = self._save_config()
@@ -1610,7 +1640,7 @@ class ComfyUIDrawPlugin(Star):
         text = f"✅ 方案「{conn['name']}」的模型已改为 {conn['model']}。"
         if not saved:
             text += "\n⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。"
-        yield event.plain_result(text)
+        yield await self._text_result(event, text)
 
     def _cloud_preset_text(self):
         """云绘图预设的文字兜底内容。"""
@@ -1660,11 +1690,11 @@ class ComfyUIDrawPlugin(Star):
         if not self._access_allowed(event):
             notice = self._deny_notice()
             if notice:
-                yield event.plain_result(notice)
+                yield await self._text_result(event, notice)
             return
         p = (prompt or "").strip()
         if not p:
-            yield event.plain_result("（云端绘图）请告诉我要画什么。")
+            yield await self._text_result(event, "（云端绘图）请告诉我要画什么。")
             return
         opts = {"size": (size or "").strip() or None, "batch": None,
                 "negative": None, "steps": None, "cfg": None, "seed": None, "workflow": None}
@@ -1727,7 +1757,7 @@ class ComfyUIDrawPlugin(Star):
                 opts["size"] = preset_size
             opts = self._normalize_options(prompt, opts, cloud=True)
         except ComfyUIError as e:
-            yield event.plain_result(f"❌ 参数错误：{e}")
+            yield await self._text_result(event, f"❌ 参数错误：{e}")
             return
         size_str = (opts.get("size") or "").strip() or None
         if size_str:
@@ -1748,7 +1778,7 @@ class ComfyUIDrawPlugin(Star):
             try:
                 gemini_config = self._gemini_image_config(size_str, quality)
             except ComfyUIError as e:
-                yield event.plain_result(f"❌ 参数错误：{e}")
+                yield await self._text_result(event, f"❌ 参数错误：{e}")
                 return
 
         self._sweep_temp()
@@ -1803,7 +1833,7 @@ class ComfyUIDrawPlugin(Star):
             await self._recall_progress_message(event, progress_message_id)
 
         if generation_error:
-            yield event.plain_result(generation_error)
+            yield await self._text_result(event, generation_error)
             if not results:
                 return
 
