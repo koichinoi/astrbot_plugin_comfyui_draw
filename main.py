@@ -22,7 +22,10 @@ from .templates import (
     DAILY_ME_CARD_TMPL,
     DEFAULT_WORKFLOW,
     HELP_CARD_THEMES,
+    REIMU_INFO_CARD_TMPL,
 )
+
+ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
 class ComfyUIError(Exception):
@@ -377,6 +380,33 @@ class ComfyUIDrawPlugin(Star):
         if value.startswith("data:image/") and ";base64," in value:
             return Comp.Image.fromBase64(value.split(";base64,", 1)[1])
         return Comp.Image.fromFileSystem(value)
+
+    _asset_uri_cache = {}
+
+    @classmethod
+    def _asset_data_uri(cls, filename):
+        """把 assets/ 下的图片读成 data URI 供卡片内嵌；文件不存在时返回空串。"""
+        if filename not in cls._asset_uri_cache:
+            uri = ""
+            try:
+                with open(os.path.join(ASSET_DIR, filename), "rb") as f:
+                    mime = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
+                    uri = f"data:{mime};base64," + base64.b64encode(f.read()).decode("ascii")
+            except OSError:
+                pass
+            cls._asset_uri_cache[filename] = uri
+        return cls._asset_uri_cache[filename]
+
+    async def _info_card_result(self, event, card, fallback_text):
+        """把信息渲染成博丽灵梦风格卡片；渲染失败时退回文字。"""
+        data = {"scale": 2, "illust": self._asset_data_uri("reimu_avatar.jpg"), **card}
+        try:
+            rendered = await self.html_render(REIMU_INFO_CARD_TMPL, data)
+            if rendered:
+                return event.image_result(rendered)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[comfyui_draw] 信息卡片渲染失败，改用文字：{e}")
+        return event.plain_result(fallback_text)
 
     async def _render_daily_me_card(
         self, description, effective, workflow_name, preview_data, preview_filename
@@ -1096,22 +1126,29 @@ class ComfyUIDrawPlugin(Star):
         names = self._workflow_names()
         dirwf = self._dir_workflows()
         dflt = str(self.config.get("default_workflow_name", "") or "").strip()
-        lines = []
+        lines, rows = [], []
         for n in names:
             if n in dirwf:
-                tag = "（文件）"
+                source = "文件"
             elif n == "默认":
-                tag = "（内置/配置）"
+                source = "内置/配置"
             else:
-                tag = "（配置）"
-            if (dflt and n == dflt) or (not dflt and n == "默认"):
-                tag += " ←默认"
-            lines.append(f"· {n} {tag}")
+                source = "配置"
+            is_default = (dflt and n == dflt) or (not dflt and n == "默认")
+            lines.append(f"· {n} （{source}）" + (" ←默认" if is_default else ""))
+            rows.append({"name": n, "desc": f"来源：{source}", "tag": "默认" if is_default else ""})
         sample = next(iter(dirwf), None) or "工作流名"
-        tip = f"\n\n用 -w 名称 选择，例如：/绘图 a cat -w {sample}"
+        tips = [f"用 -w 名称 选择，例如：/绘图 a cat -w {sample}"]
         if dirwf:
-            tip += "\n（标“文件”的来自配置的 workflow_dir 目录，文件名即工作流名）"
-        yield event.plain_result("可用工作流：\n" + "\n".join(lines) + tip)
+            tips.append("来源为「文件」的来自配置的 workflow_dir 目录，文件名即工作流名")
+        card = {
+            "title": "绘图工作流",
+            "subtitle": f"共 {len(names)} 套，今天想画点什么呢～",
+            "sections": [{"title": "📜 可用工作流", "rows": rows}],
+            "tips": tips,
+        }
+        text = "可用工作流：\n" + "\n".join(lines) + "\n\n" + "\n".join(tips)
+        yield await self._info_card_result(event, card, text)
 
     @filter.command("绘图状态", alias={"drawstatus", "comfyui_status", "comfystatus"})
     async def draw_status(self, event: AstrMessageEvent):
@@ -1122,25 +1159,38 @@ class ComfyUIDrawPlugin(Star):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(f"{http_base}/system_stats") as resp:
                     if resp.status != 200:
-                        yield event.plain_result(f"⚠️ ComfyUI 返回状态码 {resp.status}（{http_base}）")
+                        text = f"⚠️ ComfyUI 返回状态码 {resp.status}（{http_base}）"
+                        yield await self._info_card_result(event, {
+                            "title": "ComfyUI 状态",
+                            "subtitle": "神社的画室好像出了点状况……",
+                            "sections": [{"title": "⚠️ 连接异常", "lines": [text]}],
+                        }, text)
                         return
                     stats = await resp.json(content_type=None)
         except Exception as e:  # noqa: BLE001
-            yield event.plain_result(
-                f"❌ 无法连接 ComfyUI（{http_base}）：{e}\n"
-                "请确认地址正确、ComfyUI 已启动，且 AstrBot 所在机器能访问到它。"
-            )
+            hint = "请确认地址正确、ComfyUI 已启动，且 AstrBot 所在机器能访问到它。"
+            yield await self._info_card_result(event, {
+                "title": "ComfyUI 状态",
+                "subtitle": "巫女敲了半天门，没人应……",
+                "sections": [{"title": "❌ 无法连接", "lines": [f"{http_base}：{e}", hint]}],
+            }, f"❌ 无法连接 ComfyUI（{http_base}）：{e}\n{hint}")
             return
 
         system = stats.get("system", {}) if isinstance(stats, dict) else {}
         devices = stats.get("devices", []) if isinstance(stats, dict) else []
         dev = devices[0].get("name") if devices and isinstance(devices[0], dict) else "未知设备"
-        lines = [f"✅ ComfyUI 在线：{http_base}", f"设备：{dev}"]
+        workflows = "、".join(self._workflow_names())
         version = system.get("comfyui_version")
+        rows = [{"name": "地址", "desc": http_base}, {"name": "设备", "desc": dev}]
         if version:
-            lines.append(f"版本：{version}")
-        lines.append(f"可用工作流：{', '.join(self._workflow_names())}")
-        yield event.plain_result("\n".join(lines))
+            rows.append({"name": "版本", "desc": version})
+        rows.append({"name": "可用工作流", "desc": workflows})
+        text = "\n".join([f"✅ ComfyUI 在线：{http_base}"] + [f"{r['name']}：{r['desc']}" for r in rows[1:]])
+        yield await self._info_card_result(event, {
+            "title": "ComfyUI 状态",
+            "subtitle": "画室开着门，随时可以出图～",
+            "sections": [{"title": "✅ 在线", "rows": rows}],
+        }, text)
 
     @filter.command("绘图帮助", alias={"drawhelp", "comfyui_help", "comfyhelp"})
     async def draw_help(self, event: AstrMessageEvent):
@@ -1209,6 +1259,7 @@ class ComfyUIDrawPlugin(Star):
                 "groups": groups, "params": params, "examples": examples,
                 "wf_line": "可用工作流：" + ("、".join(names) if names else "（暂无，请在配置中添加）"),
                 "mode_line": f"默认工作流：{default_wf} ｜ 提示词模式：{mode}（{mode_desc}）",
+                "illust": self._asset_data_uri("reimu_avatar.jpg"),
                 "scale": 2,
             }
             return await self.html_render(self._help_card_template(), data)
@@ -1236,11 +1287,19 @@ class ComfyUIDrawPlugin(Star):
         current = self._help_card_theme()
         if not name:
             lines = [f"🎨 帮助卡片主题（当前：{current}）"]
+            rows = []
             for theme, (_tmpl, desc) in HELP_CARD_THEMES.items():
                 mark = "  ←当前" if theme == current else ""
                 lines.append(f"· {theme} — {desc}{mark}")
-            lines.append("用法：/绘图主题 <主题名>（仅管理员），切换后发送 /绘图帮助 查看效果")
-            yield event.plain_result("\n".join(lines))
+                rows.append({"name": theme, "desc": desc, "tag": "当前" if theme == current else ""})
+            usage = "用法：/绘图主题 <主题名>（仅管理员），切换后发送 /绘图帮助 查看效果"
+            lines.append(usage)
+            yield await self._info_card_result(event, {
+                "title": "帮助卡片主题",
+                "subtitle": f"当前：{current}",
+                "sections": [{"title": "🎨 可选主题", "rows": rows}],
+                "tips": [usage],
+            }, "\n".join(lines))
             return
         if not self._is_admin(event):
             yield event.plain_result("只有管理员能切换帮助卡片主题。")
@@ -1451,6 +1510,27 @@ class ComfyUIDrawPlugin(Star):
         ])
         return "\n".join(lines)
 
+    def _cloud_profile_card(self):
+        active = self._active_cloud_profile()[0]
+        rows = [
+            {
+                "name": name,
+                "desc": self._describe_cloud_connection(self._cloud_connection(name)),
+                "tag": "当前" if name == active else "",
+            }
+            for name in self._cloud_profile_names()
+        ]
+        return {
+            "title": "云绘图方案",
+            "subtitle": f"当前：{active}",
+            "sections": [{"title": "☁️ 可用方案", "rows": rows}],
+            "tips": [
+                "切换方案：/云绘图切换 <方案名> [模型名]",
+                "只换模型：/云绘图模型 <模型名>",
+                "切换仅限管理员；新方案在插件配置 cloud_profiles 中添加",
+            ],
+        }
+
     @filter.command("云绘图切换", alias={"云切换", "切换云绘图", "cloudswitch"})
     async def cloud_switch(self, event: AstrMessageEvent):
         """查看或切换云绘图方案（接口类型、地址、Key、模型）；切换仅限管理员，全局生效。"""
@@ -1464,7 +1544,9 @@ class ComfyUIDrawPlugin(Star):
         )
         args = raw.split()
         if not args:
-            yield event.plain_result(self._cloud_profile_overview())
+            yield await self._info_card_result(
+                event, self._cloud_profile_card(), self._cloud_profile_overview()
+            )
             return
         if not self._is_admin(event):
             yield event.plain_result("只有管理员能切换全局云绘图方案。")
