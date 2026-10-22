@@ -563,6 +563,11 @@ REIMU_HELP_TMPL = """
 
   /* 赛钱箱徽记 */
   .box { width: 112px; text-align: center; color: #fff3dc; }
+  .illust {
+    width: 132px; height: 132px; margin: -14px -8px -44px 0; position: relative; z-index: 4;
+    border-radius: 50%; object-fit: cover; border: 4px solid #ffffff; background: #fffaf8;
+    box-shadow: 0 4px 12px rgba(120,20,30,0.25);
+  }
   .box-lid {
     height: 12px; margin: 0 -6px; border-radius: 3px 3px 0 0;
     background: linear-gradient(180deg, #9a6233, #7b4a24);
@@ -674,6 +679,9 @@ REIMU_HELP_TMPL = """
           <div class="subtitle">乐园的巫女今天也在认真画画（大概）～</div>
         </div>
       </div>
+      {% if illust %}
+      <img class="illust" src="{{ illust }}"/>
+      {% else %}
       <div class="box serif">
         <div class="box-lid"></div>
         <div class="box-slat"></div>
@@ -682,6 +690,7 @@ REIMU_HELP_TMPL = """
           <div class="box-s">SAISEN BOX</div>
         </div>
       </div>
+      {% endif %}
     </div>
   </div>
   <div class="frill"></div>
@@ -725,6 +734,133 @@ REIMU_HELP_TMPL = """
   <div class="footer serif">
     <svg width="18" height="18" aria-hidden="true"><use href="#yy"/></svg>
     <span>博丽神社 ｜ 赛钱箱就在门口，画完记得投点香火钱哦～</span>
+  </div>
+</div>
+</body>
+</html>
+"""
+
+
+# 博丽灵梦风格的通用信息卡片：/绘图列表、/绘图状态、/云绘图切换、/绘图主题 共用。
+# 数据：title, subtitle, sections=[{title, rows=[{name, desc, tag}], lines=[...]}], tips=[...], illust（可选 data URI）
+REIMU_INFO_CARD_TMPL = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;
+    background: #fbefee;
+  }
+  .card {
+    width: 640px; zoom: {{ scale | default(2) }}; position: relative; overflow: hidden; color: #4d3336;
+    background:
+      radial-gradient(circle at 92% 70%, rgba(214,48,64,0.07), transparent 26%),
+      linear-gradient(180deg, #fffaf8 0%, #fdf3f1 60%, #fbecea 100%);
+  }
+  .serif { font-family: "Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif; }
+  .banner {
+    position: relative; min-height: 104px; padding: 22px 26px 24px 26px; color: #fffaf6;
+    background: linear-gradient(170deg, #df3646 0%, #c8283a 65%, #b11f31 100%);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .banner.has-illust { padding-right: 150px; }
+  .orb { flex-shrink: 0; filter: drop-shadow(0 3px 4px rgba(90,10,20,0.35)); }
+  .title { font-size: 25px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 2px 0 rgba(100,10,20,0.35); }
+  .subtitle { font-size: 13px; color: #ffe1dc; margin-top: 5px; letter-spacing: 1px; }
+  .illust {
+    position: absolute; right: 12px; bottom: -34px; width: 136px; height: 136px; z-index: 3;
+    border-radius: 50%; object-fit: cover; border: 4px solid #ffffff;
+    box-shadow: 0 4px 12px rgba(120,20,30,0.25); background: #fffaf8;
+  }
+  .frill {
+    position: relative; z-index: 2; height: 15px; margin-top: -1px;
+    background: radial-gradient(circle at 10px 0, #ffffff 0 9px, #e8aab0 9px 10.5px, transparent 11px) 0 0 / 20px 15px repeat-x;
+  }
+  .body { position: relative; z-index: 1; padding: 14px 22px 4px 22px; }
+  .body.has-illust { padding-top: 30px; }
+  .group {
+    position: relative; background: rgba(255,255,255,0.96); border-radius: 8px;
+    padding: 13px 18px 11px 22px; margin-bottom: 13px;
+    border: 1px solid #f2d2d3; box-shadow: 0 4px 14px rgba(170,60,70,0.10);
+  }
+  .group::before {
+    content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 5px;
+    border-radius: 0 3px 3px 0; background: #d6303f;
+  }
+  .group-h {
+    font-size: 15.5px; font-weight: 900; color: #b81f30; letter-spacing: 1px;
+    padding-bottom: 7px; margin-bottom: 6px; border-bottom: 1.5px dashed #f2cfd1;
+  }
+  .row { display: flex; align-items: baseline; gap: 10px; padding: 5px 2px; }
+  .row + .row { border-top: 1px solid #f8e6e6; }
+  .row-name { flex-shrink: 0; min-width: 120px; font-weight: 800; font-size: 14px; color: #a91d2c; }
+  .row-desc { flex: 1; font-size: 13px; line-height: 1.55; color: #6e5155; word-break: break-all; }
+  .tag {
+    flex-shrink: 0; align-self: center; font-size: 10.5px; font-weight: 900; letter-spacing: 1px;
+    padding: 2px 6px; border-radius: 2px; color: #c4202f; background: #fffaf0;
+    border: 1.5px solid #d6303f; outline: 1px solid #fffaf0; transform: rotate(-4deg);
+  }
+  .line { font-size: 13px; line-height: 1.7; color: #6e5155; padding: 1px 2px; }
+  .tips {
+    border-radius: 4px; padding: 8px 14px; margin-bottom: 12px; border-left: 3px solid #e0707b;
+    background: repeating-linear-gradient(180deg, #fffdfb 0, #fffdfb 23px, #f6e1e1 23px, #f6e1e1 24px);
+  }
+  .tip { font-size: 12.5px; color: #6e5155; line-height: 24px; }
+  .footer {
+    position: relative; z-index: 1; margin-top: 8px; padding: 10px 14px 12px 14px;
+    display: flex; justify-content: center; align-items: center; gap: 10px;
+    color: #fff3ee; font-size: 12.5px; letter-spacing: 2px; background: #c8283a;
+  }
+  .footer::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -12px; height: 12px;
+    background: radial-gradient(circle at 10px 12px, #c8283a 0 9px, transparent 10px) 0 0 / 20px 12px repeat-x;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="yy" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="47" fill="#ffffff" stroke="#9e1b2a" stroke-width="4"/>
+        <path d="M50 3 A47 47 0 0 1 50 97 A23.5 23.5 0 0 1 50 50 A23.5 23.5 0 0 0 50 3 Z" fill="#d6303f"/>
+        <circle cx="50" cy="26.5" r="7" fill="#d6303f"/>
+        <circle cx="50" cy="73.5" r="7" fill="#ffffff"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="banner{% if illust %} has-illust{% endif %}">
+    <svg class="orb" width="52" height="52" aria-hidden="true"><use href="#yy"/></svg>
+    <div>
+      <div class="title serif">{{ title | e }}</div>
+      {% if subtitle %}<div class="subtitle">{{ subtitle | e }}</div>{% endif %}
+    </div>
+    {% if illust %}<img class="illust" src="{{ illust }}"/>{% endif %}
+  </div>
+  <div class="frill"></div>
+
+  <div class="body{% if illust %} has-illust{% endif %}">
+    {% for s in sections %}
+    <div class="group">
+      <div class="group-h serif">{{ s.title | e }}</div>
+      {% for r in s['rows'] or [] %}
+      <div class="row"><span class="row-name">{{ r.name | e }}</span><span class="row-desc">{{ r.desc | e }}</span>{% if r.tag %}<span class="tag">{{ r.tag | e }}</span>{% endif %}</div>
+      {% endfor %}
+      {% for l in s['lines'] or [] %}<div class="line">{{ l | e }}</div>{% endfor %}
+    </div>
+    {% endfor %}
+    {% if tips %}
+    <div class="tips">{% for t in tips %}<div class="tip">{{ t | e }}</div>{% endfor %}</div>
+    {% endif %}
+  </div>
+
+  <div class="footer serif">
+    <svg width="16" height="16" aria-hidden="true"><use href="#yy"/></svg>
+    <span>{{ footer | default("博丽神社 ｜ 有事就来神社找巫女吧～") | e }}</span>
   </div>
 </div>
 </body>

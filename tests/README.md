@@ -10,6 +10,7 @@ python tests/test_gemini_text_only.py
 python tests/test_cloud_profiles.py
 python tests/test_help_theme.py
 python tests/test_cloud_default_style.py
+python tests/test_info_cards.py
 ```
 
 测试使用 AstrBot/aiohttp 替身和虚构的 API Key，不连接真实出图服务，不消耗接口额度。
@@ -20,6 +21,7 @@ python tests/test_cloud_default_style.py
 - `test_gemini_text_only.py`：Gemini 只回文字时的出图要求、单次重试、拦截不重试、批量与部分结果。
 - `test_cloud_profiles.py`：云绘图方案继承与回退、按接口类型选用专属 Key、按方案发送请求、`/云绘图切换` 与 `/云绘图模型` 的权限、写回和隐私检查。
 - `test_help_theme.py`：帮助卡片主题选择与回退、神社模板完整渲染全部帮助内容、`/绘图主题` 的权限与写回。
+- `test_info_cards.py`：`/绘图列表`、`/绘图主题`、`/云绘图切换` 的博丽灵梦信息卡片完整渲染、不泄露地址和 Key、渲染失败退回文字。
 - `test_cloud_default_style.py`：默认画风只追加到普通文生图，预设、`--style`、原图编辑与「二次元的我」不受影响，可改可关。
 
 测试会像 AstrBot 一样把插件目录作为包加载，因此 `main.py` 可以相对导入 `presets.py` 与 `templates.py`。

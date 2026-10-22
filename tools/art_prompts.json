@@ -1,0 +1,73 @@
+{
+  "model": "gpt-image-2",
+  "subject": "Hakurei Reimu from Touhou Project: shrine maiden with long black hair, a large red hair bow with white frilled edges, red-and-white detached-sleeve miko outfit with a yellow ascot, red skirt, cheerful confident expression",
+  "default_style": "日系二次元动漫插画，干净线稿，赛璐璐上色，不要真人照片或写实风格",
+  "images": [
+    {
+      "name": "logo",
+      "file": "logo.png",
+      "size": "1024x1024",
+      "max_side": 512,
+      "prompt": "A polished square app icon for an AI drawing plugin, themed on Hakurei Reimu from Touhou Project. Centered emblem: a glossy red-and-white yin-yang orb with a big red hair bow with white frilled edges tied on top of it, and a calligraphy paintbrush crossing behind it with a stroke of red ink. A paper ofuda talisman tucked at the side. Warm cream-white background with a soft red rounded-square frame, subtle shrine-paper texture. Clean flat-shaded vector style with gentle highlights, bold readable silhouette at small sizes, red / white / gold palette. No text, no letters, no watermark."
+    },
+    {
+      "name": "banner",
+      "file": "assets/banner.jpg",
+      "size": "1536x1024",
+      "max_side": 1600,
+      "default_style": true,
+      "prompt": "Wide README banner illustration. {subject}. She sits on the wooden veranda of the Hakurei Shrine painting on a large canvas with a calligraphy brush; magical brush strokes of red light and floating yin-yang orbs swirl out of the canvas and turn into small paintings (a figurine, a pixel sprite, a watercolor landscape) drifting in the air. Red torii gate, cherry blossom petals, donation box (saisen box) beside her, warm late-afternoon light. Keep the left third of the frame calm with soft sky and petals so a title can be placed there. No text, no letters, no watermark."
+    },
+    {
+      "name": "help",
+      "file": "assets/help_reimu.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "default_style": true,
+      "prompt": "Chibi mascot illustration of {subject}, cheerful pose, holding a large calligraphy paintbrush in one hand and a gohei in the other, a small yin-yang orb floating beside her, a few ofuda talismans fluttering. Full body, centered, clean thick outline, isolated on a plain flat light cream background (#fffaf8) with no scenery, so it can be cut out and placed on a card. No text, no letters, no watermark."
+    },
+    {
+      "name": "anime",
+      "file": "assets/showcase/anime.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "default_style": true,
+      "prompt": "{subject}, standing in front of the red torii gate of the Hakurei Shrine at dusk, holding a gohei, cherry blossoms drifting, upper body portrait"
+    },
+    {
+      "name": "figure",
+      "file": "assets/showcase/figure.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "preset": "手办"
+    },
+    {
+      "name": "clay",
+      "file": "assets/showcase/clay.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "preset": "黏土"
+    },
+    {
+      "name": "pixel",
+      "file": "assets/showcase/pixel.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "preset": "像素"
+    },
+    {
+      "name": "sticker",
+      "file": "assets/showcase/sticker.png",
+      "size": "1024x1024",
+      "max_side": 900,
+      "preset": "贴纸"
+    },
+    {
+      "name": "watercolor",
+      "file": "assets/showcase/watercolor.jpg",
+      "size": "1024x1536",
+      "max_side": 900,
+      "preset": "水彩"
+    }
+  ]
+}
