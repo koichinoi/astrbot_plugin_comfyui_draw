@@ -1,10 +1,56 @@
-# astrbot_plugin_comfyui_draw
-
 <p align="center">
-  <img src="logo.png" alt="ComfyUI 绘图插件图标" width="180">
+  <img src="assets/banner.png" alt="博丽神社 · ComfyUI 绘图" width="100%">
 </p>
 
-让 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 通过 **ComfyUI 的工作流**进行 AI 绘图。
+<h1 align="center">
+  <img src="logo.png" alt="" width="64" align="center"><br>
+  astrbot_plugin_comfyui_draw
+</h1>
+
+<p align="center">
+  <b>博丽神社的画室</b> ── 让 <a href="https://github.com/AstrBotDevs/AstrBot">AstrBot</a> 用 ComfyUI 工作流、GPT-Image 或 Antigravity/Gemini 画画
+</p>
+
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.13.1-d6303f?style=flat-square">
+  <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
+  <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
+  <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
+  <img alt="python" src="https://img.shields.io/badge/python-3.10%2B-f2c2c6?style=flat-square">
+</p>
+
+---
+
+## ✨ 能做什么
+
+| | |
+| --- | --- |
+| 🎨 **本地 ComfyUI 出图** | 把自己的工作流导出成 API 格式丢进文件夹，`/绘图 提示词` 就能用；支持多工作流切换、参数注入、LoRA 叠加、图生视频。 |
+| ☁️ **云绘图** | `/云绘图` 接 GPT-Image 或 Sub2API Antigravity/Gemini；引用或附带原图时自动改成图片编辑。 |
+| 🧸 **一键预设** | `--手办`、`--黏土`、`--像素`、`--贴纸`、`--水彩`… 十几种风格预设，`/变手办` 直接把原图变成收藏级手办。 |
+| 🎀 **博丽灵梦风卡片** | 帮助、工作流列表、ComfyUI 状态、云绘图方案都用红白巫女风格的图片卡片回复，渲染失败自动退回文字。 |
+| 🌸 **二次元的我** | 每人每天抽一张自己的二次元形象，附资料卡。 |
+
+## 🖼️ 效果展示
+
+下面的图全部由本插件的云绘图接口生成，主角是博丽灵梦；除第一张外都直接使用插件内置预设的提示词（`tools/art_prompts.json`）。
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/showcase/anime.png" width="240"><br><code>/云绘图 灵梦</code><br>默认日系画风</td>
+    <td align="center"><img src="assets/showcase/figure.png" width="240"><br><code>--手办</code><br>收藏级 PVC 手办</td>
+    <td align="center"><img src="assets/showcase/clay.png" width="240"><br><code>--黏土</code><br>Q 版黏土人</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/showcase/pixel.png" width="240"><br><code>--像素</code><br>复古像素画</td>
+    <td align="center"><img src="assets/showcase/sticker.png" width="240"><br><code>--贴纸</code><br>模切贴纸</td>
+    <td align="center"><img src="assets/showcase/watercolor.png" width="240"><br><code>--水彩</code><br>水彩插画</td>
+  </tr>
+</table>
+
+---
+
+## 这是什么
 
 你只需要把自己在 ComfyUI 里搭好的工作流导出成 **API 格式**，在要动态替换的地方留几个占位符，剩下的交给插件：用户发 `/绘图 ...`，插件把参数填进工作流、提交给 ComfyUI、等待出图、再把图片发回聊天里。
 
@@ -28,6 +74,8 @@ AstrBot/
             ├── _conf_schema.json
             ├── requirements.txt
             ├── logo.png
+            ├── assets/          # 横幅、卡片插画、效果示例图
+            ├── tools/           # 美术图生成脚本（可选，运行插件不需要）
             └── README.md
 ```
 
@@ -57,7 +105,7 @@ AstrBot/
 | `auto_randomize_seed` | 每次自动随机种子（默认开）。 |
 | `max_concurrent_tasks` | 最大并发生成任务数。 |
 | `timeout` | 单次生成超时（秒）。 |
-| `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱）。可用 `/绘图主题` 在线切换。 |
+| `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱，新安装的默认值）。可用 `/绘图主题` 在线切换。 |
 | `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
 | `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。方案填了自己的地址时必须同时填 Key，不会借用顶层 Key。 |
 | `openai_image_provider` | 云端绘图接口类型：`auto`、`openai-compatible` 或 `sub2api-antigravity`。 |
@@ -369,3 +417,16 @@ Authorization: Bearer <Sub2API API Key>
 ## 工作原理
 
 提交 `POST /prompt` → 通过 `ws://.../ws` 监听执行完成 → `GET /history/{id}` 取输出 → `GET /view` 下载图片 → 用 AstrBot 消息链把图片发回会话。全程异步（aiohttp），不会阻塞机器人。
+
+---
+
+## 重新生成美术图
+
+logo、横幅、帮助卡插画和效果示例图都是用插件自己的云绘图接口画的，提示词在 `tools/art_prompts.json`。想换主角或重画时，在插件根目录执行：
+
+```bash
+IMAGE_BASE_URL=http://你的接口/v1 IMAGE_API_KEY=你的Key python tools/gen_art.py           # 全部重画
+IMAGE_BASE_URL=... IMAGE_API_KEY=... python tools/gen_art.py logo banner                  # 只画指定几张
+```
+
+脚本只用标准库，Key 只从环境变量读取，不会写进文件。画完 `help` 后，装了 Pillow 的话脚本会顺手把它缩成卡片用的小头像 `assets/reimu_avatar.jpg`；删掉这个文件，卡片就不显示插画。

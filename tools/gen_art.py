@@ -42,6 +42,22 @@ def generate(base, key, model, size, prompt):
         return resp.read()
 
 
+def make_avatar(src, dst, size=320):
+    """把帮助插画缩成卡片内嵌的小头像（JPEG，减小 html_render 的数据量）；没有 Pillow 就跳过。"""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("  未安装 Pillow，跳过生成卡片小头像")
+        return
+    with Image.open(src) as img:
+        img = img.convert("RGB")
+        side = min(img.size)
+        left, top = (img.width - side) // 2, (img.height - side) // 2
+        img = img.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
+        img.save(dst, "JPEG", quality=88)
+    print(f"  已生成卡片小头像 {os.path.relpath(dst, ROOT)}")
+
+
 def main(names):
     base = os.environ.get("IMAGE_BASE_URL", "").strip()
     key = os.environ.get("IMAGE_API_KEY", "").strip()
@@ -66,6 +82,8 @@ def main(names):
         with open(out, "wb") as f:
             f.write(content)
         print(f"  已保存 {item['file']}（{len(content) // 1024} KB）")
+        if item["name"] == "help":
+            make_avatar(out, os.path.join(ROOT, "assets", "reimu_avatar.jpg"))
     if failed:
         sys.exit("以下图片生成失败：" + "、".join(failed))
 
