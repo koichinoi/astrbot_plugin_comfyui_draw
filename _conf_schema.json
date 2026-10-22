@@ -238,7 +238,7 @@
   "cloud_profiles": {
     "type": "template_list",
     "description": "云绘图方案（可选，用于在线切换）",
-    "hint": "保存多套云绘图接口，例如一套 ChatGPT2API、一套 Sub2API Antigravity。方案里留空的地址 / Key / 模型会沿用下面的默认云绘图配置。发送 /云绘图切换 查看与切换。",
+    "hint": "保存多套云绘图接口，例如一套 ChatGPT2API、一套 Sub2API Antigravity。方案里留空的地址 / 模型会沿用下面的默认云绘图配置；Key 只在地址也留空时才沿用。发送 /云绘图切换 查看与切换。",
     "templates": {
       "profile": {
         "name": "云绘图方案",
@@ -271,7 +271,7 @@
           "api_key": {
             "type": "string",
             "description": "API Key",
-            "hint": "留空则沿用 openai_image_api_key。注意：不同站点请分别填写，避免把一个站点的 Key 发给另一个站点。",
+            "hint": "留空时：若方案的 API 地址也留空（同一站点），按接口类型沿用顶层专属 Key 或 openai_image_api_key；若方案填了自己的地址，则不会借用顶层 Key，必须在这里填写。",
             "default": ""
           },
           "model": {
@@ -311,7 +311,25 @@
   "openai_image_api_key": {
     "type": "string",
     "description": "云端绘图 API Key",
-    "hint": "对应服务的密钥，会作为 Bearer Token 发送。注意：这种接口是按量付费的，调用会消耗你的额度。",
+    "hint": "通用密钥，会作为 Bearer Token 发送。下方对应接口类型的专属 Key 留空时才使用它（auto 模式始终使用它）。注意：这种接口是按量付费的，调用会消耗你的额度。",
+    "default": ""
+  },
+  "chatgpt2api_api_key": {
+    "type": "string",
+    "description": "ChatGPT2API 专属 API Key",
+    "hint": "接口类型为 chatgpt2api 时使用，填 ChatGPT2API 的 auth-key。留空则沿用上面的通用 API Key。",
+    "default": ""
+  },
+  "openai_compatible_api_key": {
+    "type": "string",
+    "description": "OpenAI 兼容接口专属 API Key",
+    "hint": "接口类型为 openai-compatible 时使用。留空则沿用上面的通用 API Key。",
+    "default": ""
+  },
+  "sub2api_antigravity_api_key": {
+    "type": "string",
+    "description": "Sub2API Antigravity 专属 API Key",
+    "hint": "接口类型为 sub2api-antigravity 时使用，填绑定到 Antigravity 分组的 Sub2API Key。留空则沿用上面的通用 API Key。",
     "default": ""
   },
   "openai_image_model": {

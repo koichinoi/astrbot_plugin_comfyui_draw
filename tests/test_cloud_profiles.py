@@ -87,6 +87,30 @@ class ProfileResolutionTests(unittest.TestCase):
         self.assertEqual(same["api_key"], "default-key-not-real")
         self.assertEqual(same["model"], "other-image-model")
 
+    def test_provider_specific_top_level_keys(self):
+        obj = profiled(
+            chatgpt2api_api_key="c2a-key-not-real",
+            sub2api_antigravity_api_key="sub2-key-not-real",
+        )
+        self.assertEqual(obj._cloud_connection()["api_key"], "default-key-not-real")  # auto 用通用 Key
+        obj.config["openai_image_provider"] = "chatgpt2api"
+        self.assertEqual(obj._cloud_connection()["api_key"], "c2a-key-not-real")
+        obj.config["openai_image_provider"] = "sub2api-antigravity"
+        self.assertEqual(obj._cloud_connection()["api_key"], "sub2-key-not-real")
+        obj.config["openai_image_provider"] = "openai-compatible"  # 专属 Key 留空沿用通用 Key
+        conn = obj._cloud_connection()
+        self.assertEqual(conn["api_key"], "default-key-not-real")
+        self.assertEqual(conn["api_key_field"], "openai_compatible_api_key")
+
+        # 同站点方案（地址留空）按自己的接口类型取专属 Key
+        obj.config["openai_compatible_api_key"] = "compat-key-not-real"
+        self.assertEqual(obj._cloud_connection("SameSite")["api_key"], "compat-key-not-real")
+
+    def test_profile_with_own_url_never_borrows_top_level_key(self):
+        obj = profiled(chatgpt2api_api_key="c2a-key-not-real")
+        obj.config["cloud_profiles"][0]["api_key"] = ""
+        self.assertEqual(obj._cloud_connection("GPT")["api_key"], "")
+
     def test_empty_gemini_model_uses_gemini_setting(self):
         obj = profiled(active_cloud_profile="Gemini")
         obj.config["cloud_profiles"][1]["model"] = ""
@@ -136,6 +160,19 @@ class ProfileRequestTests(unittest.IsolatedAsyncioTestCase):
         obj = profiled(active_cloud_profile="SameSite", openai_image_api_key="")
         with self.assertRaisesRegex(module.ComfyUIError, "SameSite"):
             await obj._run_openai_image("cat")
+
+
+    async def test_missing_key_names_provider_field(self):
+        obj = profiled(openai_image_provider="chatgpt2api", openai_image_api_key="")
+        with self.assertRaisesRegex(module.ComfyUIError, "chatgpt2api_api_key"):
+            await obj._run_openai_image("cat")
+
+    async def test_top_level_provider_key_is_sent(self):
+        session = Session([Response(200, payload=openai_payload())])
+        obj = profiled(openai_image_provider="chatgpt2api", chatgpt2api_api_key="c2a-key-not-real")
+        with patch.object(module.aiohttp, "ClientSession", return_value=session, create=True):
+            await obj._run_openai_image("cat")
+        self.assertEqual(session.calls[0][1]["headers"]["Authorization"], "Bearer c2a-key-not-real")
 
 
 class SwitchCommandTests(unittest.IsolatedAsyncioTestCase):
