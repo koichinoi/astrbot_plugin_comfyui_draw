@@ -34,7 +34,7 @@ def generate(base, key, model, size, prompt):
         base.rstrip("/") + "/images/generations", data=body,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=600) as resp:
+    with urllib.request.urlopen(req, timeout=350) as resp:
         data = json.loads(resp.read())["data"][0]
     if data.get("b64_json"):
         return base64.b64decode(data["b64_json"])
