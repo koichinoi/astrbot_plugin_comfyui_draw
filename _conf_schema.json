@@ -218,6 +218,12 @@
     "description": "出图后附带种子等参数信息",
     "default": true
   },
+  "text_as_card": {
+    "type": "bool",
+    "description": "文字回复改用博丽灵梦图片卡片",
+    "hint": "开启后报错、权限、切换结果、用法等文字回复都渲染成小图片卡片（渲染失败自动退回文字）。「正在生成」进度提示和出图结果下的参数说明始终是文字。嫌出图卡片慢可以关闭。",
+    "default": true
+  },
   "help_card_theme": {
     "type": "string",
     "description": "/绘图帮助 卡片主题",

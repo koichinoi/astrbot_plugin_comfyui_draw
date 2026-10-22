@@ -85,5 +85,39 @@ class InfoCardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('src="data:image/jpeg;base64,AAAA"', html)
 
 
+
+class NoticeCardTests(unittest.IsolatedAsyncioTestCase):
+    def test_kind_from_prefix(self):
+        obj, _ = carded()
+        ok = obj._notice_card_data("✅ 默认工作流已切换为「a」。")
+        self.assertEqual((ok["kind"], ok["lines"]), ("ok", ["默认工作流已切换为「a」。"]))
+        self.assertEqual(obj._notice_card_data("❌ 参数错误：x")["kind"], "error")
+        warn = obj._notice_card_data("⚠️ 写回失败\n第二行")
+        self.assertEqual((warn["kind"], warn["lines"]), ("warn", ["写回失败", "第二行"]))
+        self.assertEqual(obj._notice_card_data("只有管理员能切换")["kind"], "info")
+
+    async def test_text_reply_renders_notice_card(self):
+        obj, rendered = carded()
+        result = await run(obj.help_theme(with_message(CardEvent, "/绘图主题 神社")))
+        self.assertEqual(result, [("image", "card.png")])
+        self.assertIs(rendered["template"], templates.REIMU_NOTICE_CARD_TMPL)
+        html = html_of(rendered)
+        self.assertIn("只有管理员能切换帮助卡片主题", html)
+
+    async def test_notice_card_escapes_html(self):
+        obj, rendered = carded()
+        await obj._text_result(CardEvent(), "❌ 找不到工作流「<b>x</b>」")
+        html = html_of(rendered)
+        self.assertIn("&lt;b&gt;x&lt;/b&gt;", html)
+        self.assertIn("出错了", html)
+
+    async def test_toggle_off_and_render_failure_send_text(self):
+        obj, rendered = carded(text_as_card=False)
+        self.assertEqual(await obj._text_result(CardEvent(), "你好"), ("plain", "你好"))
+        self.assertEqual(rendered, {})
+        obj, _ = carded(render_ok=False)
+        self.assertEqual(await obj._text_result(CardEvent(), "你好"), ("plain", "你好"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
