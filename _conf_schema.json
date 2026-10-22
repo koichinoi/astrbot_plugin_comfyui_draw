@@ -238,7 +238,7 @@
   "cloud_profiles": {
     "type": "template_list",
     "description": "云绘图方案（可选，用于在线切换）",
-    "hint": "保存多套云绘图接口，例如一套 ChatGPT2API、一套 Sub2API Antigravity。方案里留空的地址 / 模型会沿用下面的默认云绘图配置；Key 只在地址也留空时才沿用。发送 /云绘图切换 查看与切换。",
+    "hint": "保存多套云绘图接口，例如一套 OpenAI 兼容接口、一套 Sub2API Antigravity。方案里留空的地址 / 模型会沿用下面的默认云绘图配置；Key 只在地址也留空时才沿用。发送 /云绘图切换 查看与切换。",
     "templates": {
       "profile": {
         "name": "云绘图方案",
@@ -257,7 +257,6 @@
             "default": "auto",
             "options": [
               "auto",
-              "chatgpt2api",
               "openai-compatible",
               "sub2api-antigravity"
             ]
@@ -287,11 +286,10 @@
   "openai_image_provider": {
     "type": "string",
     "description": "云端绘图接口类型",
-    "hint": "sub2api-antigravity 使用 Sub2API 的 Antigravity/Gemini 原生文生图与图片编辑接口；auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时尝试 /v1；chatgpt2api 自动补全 /v1/images/generations；openai-compatible 直接拼接 /images/generations。",
+    "hint": "sub2api-antigravity 使用 Sub2API 的 Antigravity/Gemini 原生文生图与图片编辑接口；auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时尝试 /v1；openai-compatible 直接拼接 /images/generations。",
     "default": "auto",
     "options": [
       "auto",
-      "chatgpt2api",
       "openai-compatible",
       "sub2api-antigravity"
     ]
@@ -299,25 +297,13 @@
   "openai_image_base_url": {
     "type": "string",
     "description": "云端绘图 API 地址（/云绘图 用）",
-    "hint": "Sub2API Antigravity 模式填站点根地址（如 https://你的站点），也兼容 /antigravity、/antigravity/v1beta 或 /v1 后缀；插件自动构造 Gemini 原生请求。chatgpt2api 可填项目根地址或 /v1。留空禁用云绘图。",
+    "hint": "Sub2API Antigravity 模式填站点根地址（如 https://你的站点），也兼容 /antigravity、/antigravity/v1beta 或 /v1 后缀；插件自动构造 Gemini 原生请求。OpenAI 兼容接口可填根地址或 /v1。留空禁用云绘图。",
     "default": ""
-  },
-  "openai_quota_admin_only": {
-    "type": "bool",
-    "description": "云绘图额度仅管理员可查",
-    "hint": "开启后只有 AstrBot 管理员能用 /云绘图额度 查看 ChatGPT2API 账号池数量、剩余额度和运行统计，避免在群聊公开敏感信息。",
-    "default": true
   },
   "openai_image_api_key": {
     "type": "string",
     "description": "云端绘图 API Key",
-    "hint": "通用密钥，会作为 Bearer Token 发送。下方对应接口类型的专属 Key 留空时才使用它（auto 模式始终使用它）。注意：这种接口是按量付费的，调用会消耗你的额度。",
-    "default": ""
-  },
-  "chatgpt2api_api_key": {
-    "type": "string",
-    "description": "ChatGPT2API 专属 API Key",
-    "hint": "接口类型为 chatgpt2api 时使用，填 ChatGPT2API 的 auth-key。留空则沿用上面的通用 API Key。",
+    "hint": "通用密钥，会作为 Bearer Token 发送。auto 模式始终使用它；其他接口类型的专属 Key 留空时也使用它。注意：这种接口是按量付费的，调用会消耗你的额度。",
     "default": ""
   },
   "openai_compatible_api_key": {
@@ -334,7 +320,7 @@
   },
   "openai_image_model": {
     "type": "string",
-    "description": "OpenAI / ChatGPT2API 绘图模型名",
+    "description": "OpenAI 兼容绘图模型名",
     "hint": "如 gpt-image-2。Sub2API Antigravity 模式使用下方独立的 gemini_image_model，不使用此项。",
     "default": "gpt-image-2"
   },
@@ -391,13 +377,13 @@
   "openai_image_response_format": {
     "type": "string",
     "description": "云端绘图返回方式（response_format）",
-    "hint": "留空时普通接口使用服务默认值，chatgpt2api 模式自动使用 b64_json。可选 url 或 b64_json；插件两种都能解析。若图片链接过期或无法访问，使用 b64_json 更稳。",
+    "hint": "留空时使用服务默认值。可选 url 或 b64_json；插件两种都能解析。若图片链接过期或无法访问，使用 b64_json 更稳。",
     "default": ""
   },
   "openai_image_edit_max_inputs": {
     "type": "int",
     "description": "云端图片编辑最多读取几张原图",
-    "hint": "引用或附带图片使用 /云绘图、/变手办 时生效。ChatGPT2API 支持多图编辑；默认最多读取 4 张，重复图片会自动忽略。",
+    "hint": "引用或附带图片使用 /云绘图、/变手办 时生效。支持多图编辑；默认最多读取 4 张，重复图片会自动忽略。",
     "default": 4
   },
   "openai_image_edit_use_source_size": {
@@ -456,7 +442,7 @@
   "daily_me_backend": {
     "type": "string",
     "description": "「二次元的我」生成来源",
-    "hint": "comfyui 使用下面指定的本地工作流；cloud 使用云绘图接口（包括 chatgpt2api）。切到 cloud 后仍保留每日限次、资料卡、引用回复和完整原图。",
+    "hint": "comfyui 使用下面指定的本地工作流；cloud 使用云绘图接口。切到 cloud 后仍保留每日限次、资料卡、引用回复和完整原图。",
     "default": "comfyui",
     "options": [
       "comfyui",

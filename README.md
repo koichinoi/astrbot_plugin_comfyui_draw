@@ -60,11 +60,10 @@ AstrBot/
 | `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱）。可用 `/绘图主题` 在线切换。 |
 | `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
 | `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。方案填了自己的地址时必须同时填 Key，不会借用顶层 Key。 |
-| `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api`、`openai-compatible` 或 `sub2api-antigravity`。 |
-| `openai_image_base_url` | 云端绘图接口基址。ChatGPT2API 可直接填项目根地址，插件会自动补文生图 `/v1/images/generations` 或图片编辑 `/v1/images/edits`。默认留空。 |
-| `openai_quota_admin_only` | `/云绘图额度` 是否仅限 AstrBot 管理员使用，默认开启。 |
-| `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。对应接口类型的专属 Key 留空时使用；`auto` 模式始终使用它。**按量付费，调用会消耗额度。** |
-| `chatgpt2api_api_key` / `openai_compatible_api_key` / `sub2api_antigravity_api_key` | 各接口类型的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
+| `openai_image_provider` | 云端绘图接口类型：`auto`、`openai-compatible` 或 `sub2api-antigravity`。 |
+| `openai_image_base_url` | 云端绘图接口基址。`auto` 模式下根地址返回 404/405 时会自动改试 `/v1` 路径。默认留空。 |
+| `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。`auto` 模式始终使用它；其他接口类型的专属 Key 留空时也使用它。**按量付费，调用会消耗额度。** |
+| `openai_compatible_api_key` / `sub2api_antigravity_api_key` | OpenAI 兼容和 Sub2API Antigravity 的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
 | `openai_image_model` | 云端绘图模型名，如 `gpt-image-2`。 |
 | `cloud_default_art_style` | 云绘图默认美术风格，默认日系二次元插画。普通 `/云绘图` 未使用预设或 `--style` 时追加到提示词；描述中写明其他画风时以描述为准，清空则不追加。 |
 | `openai_image_size` | 云端文生图默认尺寸；GPT-Image 2 还支持符合限制的自定义宽高。 |
@@ -77,7 +76,7 @@ AstrBot/
 | `access_deny_notice` | 无权限时是否回复提示（默认开；关则静默忽略）。 |
 | `show_progress` / `auto_recall_progress` | 是否发送「正在生成」提示 / 生成结束后自动撤回该提示。 |
 | `progress_recall_delay_ms` | 生成结束后撤回进度消息的延迟，默认 200 毫秒。 |
-| `daily_me_backend` | 「二次元的我」生成来源：`comfyui`（本地工作流）或 `cloud`（云绘图/ChatGPT2API）。 |
+| `daily_me_backend` | 「二次元的我」生成来源：`comfyui`（本地工作流）或 `cloud`（云绘图）。 |
 | `daily_me_cloud_size` | 「二次元的我」走云绘图时的尺寸，默认 `1024x1024`。 |
 | `daily_me_result_card` / `daily_me_reply_source` | 把每日角色资料渲染成图片卡片，并引用用户的原消息回复；卡片后仍附带完整分辨率原图。 |
 | `send_seed_info` | 出图后是否附带参数信息。 |
@@ -163,7 +162,6 @@ AstrBot/
 | `/云绘图预设` | 用图片卡片查看云绘图预设、尺寸与使用示例 | `/云预设`、`/gpt预设` |
 | `/云绘图切换` | 查看云绘图方案；管理员可切换方案（可同时指定模型），全局生效 | `/云切换`、`/cloudswitch` |
 | `/云绘图模型` | 查看当前方案的模型；管理员可修改，全局生效 | `/云模型`、`/cloudmodel` |
-| `/云绘图额度` | 查看 ChatGPT2API 账号池的剩余额度与运行状态，默认仅管理员 | `/云额度`、`/绘图额度`、`/gptquota` |
 | `/绘图列表` | 查看可用工作流 | `/drawlist`、`/comfyui_list` |
 | `/绘图状态` | 检查 ComfyUI 是否在线 | `/drawstatus`、`/comfystatus` |
 | `/绘图主题` | 查看帮助卡片主题；仅管理员可切换（默认 / 神社 / 博丽灵梦），全局生效 | `/帮助主题`、`/drawtheme` |
@@ -190,7 +188,7 @@ AstrBot/
 生成来源可在 `daily_me_backend` 中切换：
 
 - `comfyui`：使用 `daily_me_workflow` 指定的本地工作流。
-- `cloud`：使用已配置的云绘图接口，包括 ChatGPT2API 或 Sub2API Antigravity；尺寸由 `daily_me_cloud_size` 控制。标签式角色设定会自动包装为自然语言提示词，负面词会转换为“不要出现”的要求。
+- `cloud`：使用已配置的云绘图接口，包括 OpenAI 兼容接口或 Sub2API Antigravity；尺寸由 `daily_me_cloud_size` 控制。标签式角色设定会自动包装为自然语言提示词，负面词会转换为“不要出现”的要求。
 
 两种来源都会保留每日一次限制、资料卡、引用原消息和完整分辨率原图。云绘图会消耗对应接口额度。
 
@@ -271,17 +269,6 @@ AstrBot/
 
 `/变手办` 会自动加入“尽量保留人物身份、脸部特征、发型、服装配色、姿势、机位和构图”的要求。图生图默认沿用第一张原图的宽高，手办等预设不会再强制改成方图；如果显式使用 `--size`、`--横图`、`--竖图` 等参数，则以手动尺寸为准。GPT-Image 2 的自定义尺寸需要符合接口限制，因此不是 16 像素倍数或超出上限的原图会进行最小幅度调整。多图编辑最多读取 `openai_image_edit_max_inputs` 张，默认 4 张；重复图片自动忽略。是否能完全保持原脸仍取决于云端模型本身。
 
-### 接入 ChatGPT2API
-
-1. 把 `openai_image_provider` 设为 `chatgpt2api`。
-2. `openai_image_base_url` 填项目地址，例如 `http://127.0.0.1:3000`；填成 `http://127.0.0.1:3000/v1` 也可以。
-3. `chatgpt2api_api_key` 填 ChatGPT2API 配置里的 `auth-key`（留空则使用 `openai_image_api_key`）。
-4. 模型可填 `gpt-image-2` 或 `codex-gpt-image-2`；`response_format` 留空即可，插件会默认请求 `b64_json`。
-
-文生图使用 `/v1/images/generations`，引用/附带原图时使用 multipart 格式的 `/v1/images/edits`。插件也支持把接口类型留在 `auto`：根路径返回 404/405 时，会自动改试对应的 `/v1` 路径。ChatGPT2API 属于非官方逆向项目，请遵守该项目说明，只在你有权使用的账号和环境中部署。
-
-管理员发送 `/云绘图额度`，插件会读取 ChatGPT2API 的 `/health?format=json`，显示当前/可用账号数、账号池剩余额度、限流/异常/禁用数量及累计成功失败次数。这里的“剩余额度”是项目账号池合计，不是官方 API 的货币账单余额；其他 OpenAI 兼容服务若没有该健康接口，会返回“不支持额度查询”的提示。
-
 ### 接入 Sub2API Antigravity
 
 适用于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 的 Antigravity 分组。`Antigravity-Pro` 是站点分组名称，不是请求使用的模型名。
@@ -324,7 +311,7 @@ Authorization: Bearer <Sub2API API Key>
 - 模型名以站点实际提供为准，名字中带 `image` 不代表上游一定支持生图；若兼容后仍没有最终图片，需检查站点模型映射。插件不会自动切换到其他模型。
 - 手办、毛绒、海报、UI 等预设继续可用；`daily_me_backend=cloud` 时，「二次元的我」也使用此渠道，保留每日一次、引用回复、资料卡与原图。
 - Sub2API 管理员需要允许对应分组绘图、放行模型，并保证上游账号有对应模型权限和额度。404 请检查站点地址和版本；403 请检查 Key、分组权限及模型白名单。
-- Antigravity 模式暂不提供 `/云绘图额度` 查询，请在 Sub2API 控制台查看。此次适配使用离线响应模拟验证，未调用用户的付费接口；实际可用模型以你的站点为准。
+- 余额与额度请在 Sub2API 控制台查看。此次适配使用离线响应模拟验证，未调用用户的付费接口；实际可用模型以你的站点为准。
 
 ### 在线切换云绘图方案
 
@@ -332,7 +319,7 @@ Authorization: Bearer <Sub2API API Key>
 
 | 方案名 | 接口类型 | 地址 / Key | 模型 |
 | --- | --- | --- | --- |
-| GPT | `chatgpt2api` | ChatGPT2API 的地址和 Key | 留空（沿用 `openai_image_model`） |
+| GPT | `openai-compatible` | OpenAI 兼容接口的地址和 Key | 留空（沿用 `openai_image_model`） |
 | Gemini | `sub2api-antigravity` | Sub2API 站点地址和 Key | `gemini-3-pro-image` |
 
 方案里留空的地址、Key、模型会沿用上面的默认云绘图配置；顶层配置本身就是名为「默认」的方案。
@@ -347,7 +334,7 @@ Authorization: Bearer <Sub2API API Key>
 
 - 切换和改模型对所有群聊、私聊立即生效，并写回插件配置，重启后保留。
 - 聊天里只显示方案名、接口类型和模型，不会显示地址或 Key。
-- `/云绘图`、`/变手办`、云端「二次元的我」和 `/云绘图额度` 都使用当前方案。
+- `/云绘图`、`/变手办`、云端「二次元的我」都使用当前方案。
 - 不同站点请分别填写 Key，避免把一个站点的 Key 发给另一个站点。
 
 ## 访问控制（白名单）
