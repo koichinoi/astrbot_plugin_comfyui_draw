@@ -1844,6 +1844,12 @@ class ComfyUIDrawPlugin(Star):
     # ------------------------------------------------------------------ #
     CLOUD_PROVIDERS = ("auto", "chatgpt2api", "openai-compatible", "sub2api-antigravity")
     DEFAULT_CLOUD_PROFILE = "默认"
+    # 每种接口类型的专属 Key；留空时沿用通用的 openai_image_api_key。
+    CLOUD_PROVIDER_KEY_FIELDS = {
+        "chatgpt2api": "chatgpt2api_api_key",
+        "openai-compatible": "openai_compatible_api_key",
+        "sub2api-antigravity": "sub2api_antigravity_api_key",
+    }
 
     @classmethod
     def _normalize_cloud_provider(cls, value, fallback="auto"):
@@ -1880,10 +1886,23 @@ class ComfyUIDrawPlugin(Star):
     def _global_model_key(self, provider):
         return "gemini_image_model" if provider == "sub2api-antigravity" else "openai_image_model"
 
+    def _top_level_api_key(self, provider):
+        """返回 (配置项名, Key)：优先该接口类型的专属 Key，留空再用通用 Key。"""
+        field = self.CLOUD_PROVIDER_KEY_FIELDS.get(provider)
+        if field:
+            value = str(self.config.get(field, "") or "").strip()
+            if value:
+                return field, value
+        return field or "openai_image_api_key", str(
+            self.config.get("openai_image_api_key", "") or ""
+        ).strip()
+
     def _cloud_connection(self, name=None):
         """解析某个方案（默认为当前方案）实际使用的接口类型、地址、Key 和模型。
 
-        方案里留空的地址 / Key / 模型沿用顶层配置，方便同一站点只换接口类型或模型。
+        方案里留空的地址 / 模型沿用顶层配置，方便同一站点只换接口类型或模型。
+        Key 按接口类型取顶层专属 Key；方案填了自己的地址却没填 Key 时不借用顶层 Key，
+        避免把一个站点的 Key 发给另一个站点。
         """
         if name is None:
             name, profile = self._active_cloud_profile()
@@ -1904,11 +1923,18 @@ class ComfyUIDrawPlugin(Star):
             or str(self.config.get(self._global_model_key(provider), "") or "").strip()
             or self._default_cloud_model(provider)
         )
+        key_field, api_key = self._top_level_api_key(provider)
+        profile_key = str(profile.get("api_key", "") or "").strip()
+        if profile_key:
+            api_key = profile_key
+        elif str(profile.get("base_url", "") or "").strip():
+            api_key = ""
         return {
             "name": name,
             "provider": provider,
             "base_url": pick("base_url", "openai_image_base_url"),
-            "api_key": pick("api_key", "openai_image_api_key"),
+            "api_key": api_key,
+            "api_key_field": key_field,
             "model": model,
         }
 
@@ -2119,7 +2145,7 @@ class ComfyUIDrawPlugin(Star):
         base, key = conn["base_url"], conn["api_key"]
         if not base or not key:
             raise ComfyUIError(
-                "请先填写 Sub2API 的 openai_image_base_url 和 openai_image_api_key"
+                f"请先填写 Sub2API 的 openai_image_base_url 和 {conn['api_key_field']}"
                 + self._cloud_profile_hint(conn) + "。"
             )
         url = self._antigravity_image_url(base, conn["model"])
@@ -2351,7 +2377,7 @@ class ComfyUIDrawPlugin(Star):
             )
         if not key:
             raise ComfyUIError(
-                "未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key"
+                f"未配置云端绘图 API Key，请在插件配置里填写 {conn['api_key_field']}"
                 + self._cloud_profile_hint(conn) + "。"
             )
 
@@ -2408,7 +2434,7 @@ class ComfyUIDrawPlugin(Star):
             )
         if not key:
             raise ComfyUIError(
-                "未配置云端绘图 API Key，请在插件配置里填写 openai_image_api_key"
+                f"未配置云端绘图 API Key，请在插件配置里填写 {conn['api_key_field']}"
                 + self._cloud_profile_hint(conn) + "。"
             )
         if not source_images:

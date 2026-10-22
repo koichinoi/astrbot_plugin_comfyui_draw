@@ -59,11 +59,12 @@ AstrBot/
 | `timeout` | 单次生成超时（秒）。 |
 | `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱）。可用 `/绘图主题` 在线切换。 |
 | `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
-| `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。 |
+| `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。方案填了自己的地址时必须同时填 Key，不会借用顶层 Key。 |
 | `openai_image_provider` | 云端绘图接口类型：`auto`、`chatgpt2api`、`openai-compatible` 或 `sub2api-antigravity`。 |
 | `openai_image_base_url` | 云端绘图接口基址。ChatGPT2API 可直接填项目根地址，插件会自动补文生图 `/v1/images/generations` 或图片编辑 `/v1/images/edits`。默认留空。 |
 | `openai_quota_admin_only` | `/云绘图额度` 是否仅限 AstrBot 管理员使用，默认开启。 |
-| `openai_image_api_key` | 云端绘图 API Key（Bearer Token）。**按量付费，调用会消耗额度。** |
+| `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。对应接口类型的专属 Key 留空时使用；`auto` 模式始终使用它。**按量付费，调用会消耗额度。** |
+| `chatgpt2api_api_key` / `openai_compatible_api_key` / `sub2api_antigravity_api_key` | 各接口类型的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
 | `openai_image_model` | 云端绘图模型名，如 `gpt-image-2`。 |
 | `cloud_default_art_style` | 云绘图默认美术风格，默认日系二次元插画。普通 `/云绘图` 未使用预设或 `--style` 时追加到提示词；描述中写明其他画风时以描述为准，清空则不追加。 |
 | `openai_image_size` | 云端文生图默认尺寸；GPT-Image 2 还支持符合限制的自定义宽高。 |
@@ -274,7 +275,7 @@ AstrBot/
 
 1. 把 `openai_image_provider` 设为 `chatgpt2api`。
 2. `openai_image_base_url` 填项目地址，例如 `http://127.0.0.1:3000`；填成 `http://127.0.0.1:3000/v1` 也可以。
-3. `openai_image_api_key` 填 ChatGPT2API 配置里的 `auth-key`。
+3. `chatgpt2api_api_key` 填 ChatGPT2API 配置里的 `auth-key`（留空则使用 `openai_image_api_key`）。
 4. 模型可填 `gpt-image-2` 或 `codex-gpt-image-2`；`response_format` 留空即可，插件会默认请求 `b64_json`。
 
 文生图使用 `/v1/images/generations`，引用/附带原图时使用 multipart 格式的 `/v1/images/edits`。插件也支持把接口类型留在 `auto`：根路径返回 404/405 时，会自动改试对应的 `/v1` 路径。ChatGPT2API 属于非官方逆向项目，请遵守该项目说明，只在你有权使用的账号和环境中部署。
@@ -291,7 +292,7 @@ AstrBot/
 | --- | --- |
 | `openai_image_provider` | `sub2api-antigravity` |
 | `openai_image_base_url` | 你的 Sub2API 站点根地址，例如 `https://api.example.com` |
-| `openai_image_api_key` | 绑定到可用 Antigravity 分组的 Sub2API API Key |
+| `sub2api_antigravity_api_key` | 绑定到可用 Antigravity 分组的 Sub2API API Key（留空则使用 `openai_image_api_key`） |
 | `gemini_image_model` | 默认 `gemini-3.1-flash-image`，按站点模型列表调整，也可使用站点支持的 `gemini-3-pro-image` 等图片模型 |
 | `gemini_image_resolution` | `1K`、`2K` 或 `4K`，默认 `1K`；以模型和站点支持情况为准 |
 | `gemini_image_aspect_mode` | 默认 `auto`；不支持比例参数的模型可选 `prompt`；`strict` 不做兼容回退 |
