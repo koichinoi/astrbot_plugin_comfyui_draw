@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.13.1-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.14.0-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -69,6 +69,7 @@ AstrBot/
         └── astrbot_plugin_comfyui_draw/
             ├── main.py
             ├── presets.py
+            ├── draw_queue.py
             ├── templates.py
             ├── metadata.yaml
             ├── _conf_schema.json
@@ -103,7 +104,12 @@ AstrBot/
 | `max_prompt_length` / `max_loras` | 提示词最大字符数 / 单任务最多叠加 LoRA 数。 |
 | `max_input_size_mb` / `max_output_size_mb` | 单张输入图 / 单个输出文件的体积上限。 |
 | `auto_randomize_seed` | 每次自动随机种子（默认开）。 |
-| `max_concurrent_tasks` | 最大并发生成任务数。 |
+| `max_concurrent_tasks` / `max_concurrent_cloud_tasks` | 本地 ComfyUI / 云端各自同时进行的任务数，默认都是 2；两边分开排队，云端慢不会堵住本地。超出的任务会提示排队位置。 |
+| `max_tasks_per_user` | 每人同时在生成和排队的任务数上限（本地与云端合计），默认 1；0 不限。管理员不受限。 |
+| `user_cooldown_seconds` | 每人两次出图请求的最短间隔（秒），默认 0（不限）。管理员不受限。 |
+| `max_queue_size` | 本地、云端各自最多排队任务数，默认 20；满了提示稍后再试。0 不限。 |
+| `daily_limit_local` / `daily_limit_cloud` | 每人每天本地 / 云端最多出图张数，按成功张数计、0 点清零，默认 0（不限）。管理员和「二次元的我」不计入。 |
+| `history_size` | 每人保留几条出图记录供 `/重画`、`/我的绘图` 使用，默认 10；只存描述和参数，不存图片。0 关闭。 |
 | `timeout` | 单次生成超时（秒）。 |
 | `text_as_card` | 文字回复（报错、权限、切换结果、用法等）改用博丽灵梦图片卡片，默认开；渲染失败自动退回文字。「正在生成」进度提示和出图结果下的参数说明始终是文字。 |
 | `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱，新安装的默认值）。可用 `/绘图主题` 在线切换。 |
@@ -118,7 +124,7 @@ AstrBot/
 | `openai_image_size` | 云端文生图默认尺寸；GPT-Image 2 还支持符合限制的自定义宽高。 |
 | `openai_image_edit_max_inputs` | 云端图片编辑最多读取几张原图，默认 4；支持当前消息和引用消息。 |
 | `openai_image_edit_use_source_size` | 图生图未写 `--size` 时沿用第一张原图分辨率，默认开启。 |
-| `openai_image_timeout` | 云端绘图超时（秒）。 |
+| `openai_image_timeout` | 云端绘图超时（秒），默认 360；从轮到该任务开始计时，排队时间不算。 |
 | `enable_access_control` | 启用白名单访问控制（默认关，关时所有人可用）。 |
 | `user_whitelist` | 个人白名单（用户 ID 列表），这些用户私聊 / 群聊都能用。 |
 | `group_whitelist` | 群白名单（群 ID 列表），这些群里所有人都能用。 |
@@ -177,6 +183,11 @@ AstrBot/
 /绘图 anime girl -w anime                # 用名为 anime 的额外工作流
 /绘图列表                                 # 查看可用工作流
 /绘图状态                                 # 检查 ComfyUI 是否在线
+/重画                                     # 用上一次的描述和参数再画一次
+/重画 3 加上猫耳 --竖图                    # 重画第 3 条记录，补充描述并改成竖图
+/我的绘图                                 # 查看最近出图记录和今日剩余次数
+/绘图队列                                 # 查看谁在画、谁在排队
+/绘图队列 取消 12                          # 取消编号 #12 的任务
 /绘图帮助                                 # 查看完整使用帮助
 ```
 
@@ -213,6 +224,9 @@ AstrBot/
 | `/云绘图模型` | 查看当前方案的模型；管理员可修改，全局生效 | `/云模型`、`/cloudmodel` |
 | `/绘图列表` | 查看可用工作流 | `/drawlist`、`/comfyui_list` |
 | `/绘图状态` | 检查 ComfyUI 是否在线 | `/drawstatus`、`/comfystatus` |
+| `/重画` | 用上一次（或第 N 条记录）的描述和参数再画一次；可补充描述或改参数。本地重画默认换随机种子；原图编辑需重新引用原图 | `/再画一张`、`/redraw` |
+| `/我的绘图` | 查看自己最近的出图记录和今日剩余次数；`/我的绘图 清空` 删除自己的记录 | `/绘图记录`、`/drawhistory` |
+| `/绘图队列` | 查看本地与云端正在生成和排队的任务；`/绘图队列 取消 <编号>` 取消自己的任务，管理员可取消任何人的 | `/绘图排队`、`/drawqueue` |
 | `/绘图主题` | 查看帮助卡片主题；仅管理员可切换（默认 / 神社 / 博丽灵梦），全局生效 | `/帮助主题`、`/drawtheme` |
 | `/绘图默认` | 所有人可查看；仅管理员可切换默认工作流并持久保存 | `/drawdefault`、`/setdefault` |
 | `/绘图帮助` | 查看完整使用帮助（含当前可用工作流） | `/drawhelp`、`/comfyhelp` |
@@ -332,7 +346,7 @@ AstrBot/
 | `gemini_image_model` | 默认 `gemini-3.1-flash-image`，按站点模型列表调整，也可使用站点支持的 `gemini-3-pro-image` 等图片模型 |
 | `gemini_image_resolution` | `1K`、`2K` 或 `4K`，默认 `1K`；以模型和站点支持情况为准 |
 | `gemini_image_aspect_mode` | 默认 `auto`；不支持比例参数的模型可选 `prompt`；`strict` 不做兼容回退 |
-| `openai_image_timeout` | 默认 180 秒；上游较慢时可适当提高 |
+| `openai_image_timeout` | 默认 360 秒；上游较慢时可适当提高 |
 
 接口地址可带 `/v1`、`/antigravity`、`/antigravity/v1beta`，插件会统一构造：
 
@@ -396,6 +410,14 @@ Authorization: Bearer <Sub2API API Key>
 放行规则：**AstrBot 管理员（超级用户）始终不受限**；其次是个人白名单用户；再次是群白名单所在的群；其余一律拦截。被拦截时默认回复一句『无权限』，可用 `access_deny_notice` 关掉改成静默忽略。
 
 > 说明：白名单控制 `/绘图`、`/云绘图`、`/二次元的我` 和两个 AI 绘图工具；`/绘图默认` 可公开查看，但修改全局默认值始终只允许管理员。只读的 `/绘图列表`、`/绘图状态`、`/绘图帮助` 不受限。管理员名单在 AstrBot「配置 → 其他配置 → 管理员 ID 列表」里设置（用 `/op` 或填 ID）。
+
+## 排队与限流
+
+本地 ComfyUI 和云端各有一个队列，先到先得。轮不到时会先发一条「⏳ 排队中：第 N 位」，轮到后撤回并换成「🎨 正在生成」；超时从轮到时开始计时。每人同时只能有 `max_tasks_per_user` 个任务，还可以用 `user_cooldown_seconds` 设冷却、用 `daily_limit_cloud` 控制每人每天的云端张数。以上限制对 AstrBot 管理员不生效。
+
+`/绘图队列 取消` 能取消排队中的任务；已经开始的任务也能取消，但请求已经发出，云端可能仍会计费，ComfyUI 可能仍会把图跑完。
+
+出图记录（`draw_history.json`）和每日次数（`draw_usage.json`）同样保存在下面的 data 目录。
 
 「二次元的我」使用记录保存在 `data/plugin_data/astrbot_plugin_comfyui_draw/`，采用并发预占和原子写入；插件更新或重装不会覆盖记录。
 
