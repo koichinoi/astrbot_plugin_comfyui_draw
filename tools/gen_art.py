@@ -8,6 +8,7 @@
 只依赖标准库；Key 只从环境变量读取，不要写进仓库。
 """
 import base64
+import io
 import json
 import os
 import sys
@@ -42,8 +43,27 @@ def generate(base, key, model, size, prompt):
         return resp.read()
 
 
+def shrink(content, out, max_side):
+    """缩小并压缩成目标扩展名对应的格式，避免仓库和 README 里塞几 MB 的原图；没有 Pillow 就原样保存。"""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("  未安装 Pillow，按原图保存（体积较大）")
+        with open(out, "wb") as f:
+            f.write(content)
+        return
+    img = Image.open(io.BytesIO(content))
+    img.thumbnail((max_side, max_side), Image.LANCZOS)
+    if out.lower().endswith((".jpg", ".jpeg")):
+        img.convert("RGB").save(out, "JPEG", quality=86, optimize=True, progressive=True)
+    else:
+        # 256 色调色板（保留透明度），插画类图标基本看不出差别，体积能小一半以上
+        img = img.convert("RGBA").quantize(256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.FLOYDSTEINBERG)
+        img.save(out, "PNG", optimize=True)
+
+
 def make_avatar(src, dst, size=320):
-    """把帮助插画缩成卡片内嵌的小头像（JPEG，减小 html_render 的数据量）；没有 Pillow 就跳过。"""
+    """从帮助插画上半部裁出头像，作为卡片内嵌的小图（JPEG，减小 html_render 的数据量）。"""
     try:
         from PIL import Image
     except ImportError:
@@ -51,8 +71,8 @@ def make_avatar(src, dst, size=320):
         return
     with Image.open(src) as img:
         img = img.convert("RGB")
-        side = min(img.size)
-        left, top = (img.width - side) // 2, (img.height - side) // 2
+        side = int(min(img.size) * 0.62)
+        left, top = (img.width - side) // 2, int(img.height * 0.04)
         img = img.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
         img.save(dst, "JPEG", quality=88)
     print(f"  已生成卡片小头像 {os.path.relpath(dst, ROOT)}")
@@ -79,9 +99,8 @@ def main(names):
             failed.append(item["name"])
             continue
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        with open(out, "wb") as f:
-            f.write(content)
-        print(f"  已保存 {item['file']}（{len(content) // 1024} KB）")
+        shrink(content, out, item.get("max_side", 1024))
+        print(f"  已保存 {item['file']}（{os.path.getsize(out) // 1024} KB）")
         if item["name"] == "help":
             make_avatar(out, os.path.join(ROOT, "assets", "reimu_avatar.jpg"))
     if failed:

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="博丽神社 · ComfyUI 绘图" width="100%">
+  <img src="assets/banner.jpg" alt="博丽神社 · ComfyUI 绘图" width="100%">
 </p>
 
 <h1 align="center">
@@ -37,14 +37,14 @@
 
 <table>
   <tr>
-    <td align="center"><img src="assets/showcase/anime.png" width="240"><br><code>/云绘图 灵梦</code><br>默认日系画风</td>
-    <td align="center"><img src="assets/showcase/figure.png" width="240"><br><code>--手办</code><br>收藏级 PVC 手办</td>
-    <td align="center"><img src="assets/showcase/clay.png" width="240"><br><code>--黏土</code><br>Q 版黏土人</td>
+    <td align="center"><img src="assets/showcase/anime.jpg" width="240"><br><code>/云绘图 灵梦</code><br>默认日系画风</td>
+    <td align="center"><img src="assets/showcase/figure.jpg" width="240"><br><code>--手办</code><br>收藏级 PVC 手办</td>
+    <td align="center"><img src="assets/showcase/clay.jpg" width="240"><br><code>--黏土</code><br>Q 版黏土人</td>
   </tr>
   <tr>
-    <td align="center"><img src="assets/showcase/pixel.png" width="240"><br><code>--像素</code><br>复古像素画</td>
+    <td align="center"><img src="assets/showcase/pixel.jpg" width="240"><br><code>--像素</code><br>复古像素画</td>
     <td align="center"><img src="assets/showcase/sticker.png" width="240"><br><code>--贴纸</code><br>模切贴纸</td>
-    <td align="center"><img src="assets/showcase/watercolor.png" width="240"><br><code>--水彩</code><br>水彩插画</td>
+    <td align="center"><img src="assets/showcase/watercolor.jpg" width="240"><br><code>--水彩</code><br>水彩插画</td>
   </tr>
 </table>
 
