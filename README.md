@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.14.0-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.14.1-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -67,9 +67,13 @@ AstrBot/
 └── data/
     └── plugins/
         └── astrbot_plugin_comfyui_draw/
-            ├── main.py
-            ├── presets.py
+            ├── main.py            # 指令入口
+            ├── cloud_backend.py   # 云端绘图接口
+            ├── comfy_backend.py   # 本地 ComfyUI 与工作流注入
+            ├── usage.py           # 排队、限流、每日次数与出图记录
             ├── draw_queue.py
+            ├── errors.py
+            ├── presets.py
             ├── templates.py
             ├── metadata.yaml
             ├── _conf_schema.json
