@@ -187,9 +187,51 @@
   },
   "max_concurrent_tasks": {
     "type": "int",
-    "description": "最大并发生成任务数",
-    "hint": "同时进行的绘图请求上限，超出的会排队。",
+    "description": "本地 ComfyUI 最大并发任务数",
+    "hint": "同时提交给 ComfyUI 的绘图任务上限，超出的会排队并提示排队位置。云端绘图另有 max_concurrent_cloud_tasks，两边互不占用。",
     "default": 2
+  },
+  "max_concurrent_cloud_tasks": {
+    "type": "int",
+    "description": "云端绘图最大并发任务数",
+    "hint": "同时请求云端接口的任务上限，超出的会排队。云端慢时不会堵住本地 ComfyUI。",
+    "default": 2
+  },
+  "max_tasks_per_user": {
+    "type": "int",
+    "description": "每人同时进行的任务数上限",
+    "hint": "同一个人正在生成和排队中的任务总数上限（本地与云端合计），超出时直接提示。0 表示不限制；管理员不受限。",
+    "default": 1
+  },
+  "user_cooldown_seconds": {
+    "type": "int",
+    "description": "每人出图冷却（秒）",
+    "hint": "同一个人两次出图请求之间至少间隔多少秒。0 表示不限制；管理员不受限。",
+    "default": 0
+  },
+  "max_queue_size": {
+    "type": "int",
+    "description": "最多排队任务数",
+    "hint": "本地、云端各自最多有多少个任务在排队，满了会提示稍后再试。0 表示不限制。",
+    "default": 20
+  },
+  "daily_limit_local": {
+    "type": "int",
+    "description": "每人每日本地出图张数上限",
+    "hint": "按成功生成的张数计，每天 0 点清零。0 表示不限制；管理员不受限；「二次元的我」不计入。",
+    "default": 0
+  },
+  "daily_limit_cloud": {
+    "type": "int",
+    "description": "每人每日云端出图张数上限",
+    "hint": "按成功生成的张数计，每天 0 点清零，用于控制云端费用。0 表示不限制；管理员不受限；「二次元的我」不计入。",
+    "default": 0
+  },
+  "history_size": {
+    "type": "int",
+    "description": "每人保留的出图记录条数",
+    "hint": "用于 /重画 和 /我的绘图，只保存描述和参数，不保存图片。0 表示关闭记录（/重画 也不可用）。",
+    "default": 10
   },
   "timeout": {
     "type": "int",
@@ -401,7 +443,8 @@
   "openai_image_timeout": {
     "type": "int",
     "description": "云端绘图超时时间（秒）",
-    "default": 180
+    "hint": "从轮到该任务开始计时（排队时间不算）。接口较慢时请调高。",
+    "default": 360
   },
   "enable_access_control": {
     "type": "bool",

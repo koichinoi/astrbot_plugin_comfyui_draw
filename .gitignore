@@ -5,3 +5,5 @@ __pycache__/
 .env.*
 *_config.json
 daily_me_usage.json
+draw_history.json
+draw_usage.json

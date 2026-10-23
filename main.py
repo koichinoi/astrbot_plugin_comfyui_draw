@@ -17,6 +17,7 @@ from astrbot.api.star import Context, Star
 import astrbot.api.message_components as Comp
 
 from . import presets
+from .draw_queue import DrawCancelled, DrawQueue
 from .templates import (
     CLOUD_PRESET_CARD_TMPL,
     DAILY_ME_CARD_TMPL,
@@ -31,6 +32,11 @@ ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 class ComfyUIError(Exception):
     """ComfyUI 交互过程中的可读错误。"""
+    pass
+
+
+class DrawRejected(ComfyUIError):
+    """限流、排队已满或每日次数用完；提示原样发给用户，不加「生成失败」前缀。"""
     pass
 
 
@@ -52,9 +58,8 @@ class ComfyUIDrawPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        n = self._config_int("max_concurrent_tasks", 2, 1, 32)
-        # 限制同时进行的生成任务数，避免把 ComfyUI / 机器人打爆
-        self._sem = asyncio.Semaphore(n)
+        # 本地 ComfyUI 与云端各自排队，见 _queue()
+        self._queues = {}
         self._daily_me_lock = asyncio.Lock()
         self._daily_me_pending = set()
         # 「每日二次元的我」使用记录（{"date": "YYYY-MM-DD", "used": {uid: 1}}，跨天自动重置）
@@ -147,7 +152,7 @@ class ComfyUIDrawPlugin(Star):
             yield await self._text_result(event, "请提供提示词。例如：/绘图 a cute cat, masterpiece")
             return
 
-        async for result in self._render(event, prompt, opts):
+        async for result in self._render(event, prompt, opts, record=True):
             yield result
 
     async def _render(
@@ -159,17 +164,29 @@ class ComfyUIDrawPlugin(Star):
         caption_prefix: str = "",
         daily_card: bool = False,
         reply_to_source: bool = False,
+        record: bool = False,
+        count_usage: bool = True,
     ):
         """共享出图流程：解析工作流 → 校验格式 → 注入参数 → 调用 ComfyUI → 发送图片。
         作为异步生成器逐条 yield 要发送的消息；/绘图 指令与 AI 绘图工具共用此流程。
         on_success：仅在真正生成出图后调用一次（用于「每日二次元」这类成功才计次的场景）。
         caption_prefix：放进最终图片消息开头的说明文字。
         daily_card：把 caption_prefix 与生成图合成为「二次元的我」资料卡，同时保留原图。
-        reply_to_source：在最终消息开头引用用户触发本次绘图的原消息。"""
+        reply_to_source：在最终消息开头引用用户触发本次绘图的原消息。
+        record：成功后写入出图记录，供 /重画 与 /我的绘图 使用。
+        count_usage：成功后计入每日次数（「二次元的我」有自己的限次，不计入）。"""
+        original_prompt, original_opts = prompt, dict(opts or {})
         try:
             opts = self._normalize_options(prompt, opts, cloud=False)
         except ComfyUIError as e:
             yield await self._text_result(event, f"❌ 参数错误：{e}")
+            return
+        requested_images = self._to_int(opts.get("batch"), 1) or 1
+        rejected = self._admission_error(
+            event, "local", requested_images if count_usage else 0
+        )
+        if rejected:
+            yield await self._text_result(event, rejected)
             return
 
         # 选择工作流（-w 指定 / 配置的默认工作流名 / 内置默认）
@@ -267,31 +284,44 @@ class ComfyUIDrawPlugin(Star):
         self._sweep_temp()
 
         display_wf = wf_name or str(self.config.get("default_workflow_name", "") or "").strip() or "默认"
-        progress_message_id = None
-        if self.config.get("show_progress", True):
-            progress_text = "🎨 正在生成（" + self._fmt_parts(effective) + "）..."
-            progress_message_id, fallback = await self._start_progress(event, progress_text)
-            if fallback is not None:
-                yield fallback
-
-        results = []
-        generation_error = None
-        try:
-            async with self._sem:
-                results = await self._run_comfyui(workflow)
-        except ComfyUIError as e:
-            generation_error = f"❌ 生成失败：{e}"
-        except asyncio.TimeoutError:
-            generation_error = "❌ 生成超时。请检查 ComfyUI 是否在运行，或在配置中增大超时时间。"
-        except Exception as e:  # noqa: BLE001
-            logger.exception("[comfyui_draw] 绘图出错")
-            generation_error = f"❌ 生成出错：{type(e).__name__}: {e}"
-        finally:
-            await self._recall_progress_message(event, progress_message_id)
-
-        if generation_error:
+        progress_text = "🎨 正在生成（" + self._fmt_parts(effective) + "）..."
+        state = {}
+        async for message in self._generate_in_queue(
+            event,
+            "local",
+            f"本地·{display_wf}",
+            progress_text,
+            lambda: self._run_comfyui(workflow),
+            state,
+            count=requested_images if count_usage else 0,
+        ):
+            yield message
+        results = state.get("results") or []
+        error = state.get("error")
+        if error is not None:
+            if isinstance(error, (DrawRejected, DrawCancelled)):
+                generation_error = self._queue_error_text(error)
+            elif isinstance(error, ComfyUIError):
+                generation_error = f"❌ 生成失败：{error}"
+            elif isinstance(error, asyncio.TimeoutError):
+                seconds = self._config_int("timeout", 300, 1, 7200)
+                generation_error = (
+                    f"❌ 生成超时（超过 {seconds} 秒，配置项 timeout）。"
+                    "请检查 ComfyUI 是否在运行，或在配置中增大超时时间。"
+                )
+            else:
+                logger.error(f"[comfyui_draw] 绘图出错：{error!r}")
+                generation_error = f"❌ 生成出错：{type(error).__name__}: {error}"
             yield await self._text_result(event, generation_error)
             return
+
+        uid = self._user_id(event)
+        if count_usage:
+            self._add_usage(uid, "local", len(results))
+        if record:
+            self._record_history(
+                uid, "local", original_prompt, original_opts, f"本地·{display_wf}", len(results)
+            )
 
         chain = await self._build_result_chain(
             event,
@@ -313,6 +343,239 @@ class ComfyUIDrawPlugin(Star):
             if sent:
                 return message_id, None
         return None, event.plain_result(text)
+
+    # ------------------------------------------------------------------ #
+    # 排队、限流与每日次数
+    # ------------------------------------------------------------------ #
+    QUEUE_LABELS = {"local": "本地 ComfyUI", "cloud": "云端"}
+
+    def _queue(self, kind):
+        """本地与云端各一个队列；并发上限每次按配置刷新，改配置后无需重启。"""
+        queues = getattr(self, "_queues", None)
+        if queues is None:
+            queues = self._queues = {}
+        if kind == "cloud":
+            limit = self._config_int("max_concurrent_cloud_tasks", 2, 1, 32)
+        else:
+            limit = self._config_int("max_concurrent_tasks", 2, 1, 32)
+        queue = queues.get(kind)
+        if queue is None:
+            queue = queues[kind] = DrawQueue(kind, limit)
+        elif queue.limit != limit:
+            queue.set_limit(limit)
+        return queue
+
+    def _all_tickets(self):
+        return [t for q in (getattr(self, "_queues", None) or {}).values() for t in q.tickets()]
+
+    @classmethod
+    def _user_id(cls, event):
+        return cls._daily_me_uid(event)
+
+    def _user_name(self, event):
+        return self._safe_call(event, "get_sender_name") or self._user_id(event)
+
+    def _admission_error(self, event, kind, count):
+        """检查每人同时任务数、冷却、排队上限和每日次数；放行返回 None，否则返回提示。
+        count 为本次要计入每日次数的张数（0 表示不计）。管理员不受限。"""
+        if self._is_admin(event):
+            return None
+        uid = self._user_id(event)
+        per_user = self._config_int("max_tasks_per_user", 1, 0, 100)
+        if per_user:
+            active = sum(1 for t in self._all_tickets() if t.uid == uid)
+            if active >= per_user:
+                return f"⚠️ 你已有 {active} 个绘图任务在生成或排队，等它完成后再发吧～（发送 /绘图队列 查看）"
+        cooldown = self._config_int("user_cooldown_seconds", 0, 0, 86400)
+        last = (getattr(self, "_user_last_start", None) or {}).get(uid)
+        if cooldown and last is not None:
+            remaining = int(math.ceil(cooldown - (time.time() - last)))
+            if remaining > 0:
+                return f"⚠️ 画得太快啦，请 {remaining} 秒后再试。"
+        queue = self._queue(kind)
+        max_waiting = self._config_int("max_queue_size", 20, 0, 1000)
+        if max_waiting and len(queue.waiting) >= max_waiting:
+            return f"⚠️ {self.QUEUE_LABELS.get(kind, kind)}排队的人太多了（{len(queue.waiting)} 个），请稍后再试。"
+        limit = self._daily_limit(kind)
+        if limit and count:
+            used = self._usage_today(uid, kind)
+            if used >= limit:
+                return f"⚠️ 你今天的{self.QUEUE_LABELS.get(kind, kind)}绘图次数已用完（{used}/{limit} 张），明天再来吧～"
+            if used + count > limit:
+                return f"⚠️ 你今天的{self.QUEUE_LABELS.get(kind, kind)}绘图只剩 {limit - used} 张，本次要 {count} 张，请减少张数。"
+        return None
+
+    @staticmethod
+    def _queue_error_text(error):
+        if isinstance(error, DrawCancelled):
+            return "⚠️ 这个绘图任务已被取消。"
+        return str(error)
+
+    async def _generate_in_queue(self, event, kind, label, progress_text, run, state, count=0):
+        """排队 → 进度提示 → 执行 run()，逐条 yield 需要发送的消息。
+        结果写入 state["results"]，异常写入 state["error"]（DrawRejected / DrawCancelled / 其他）。"""
+        rejected = self._admission_error(event, kind, count)
+        if rejected:
+            state["error"] = DrawRejected(rejected)
+            return
+        queue = self._queue(kind)
+        uid = self._user_id(event)
+        ticket = queue.join(uid, self._user_name(event), label)
+        last_start = getattr(self, "_user_last_start", None)
+        if last_start is None:
+            last_start = self._user_last_start = {}
+        last_start[uid] = time.time()
+        queue_message_id = progress_message_id = None
+        try:
+            if not ticket.running and self.config.get("show_progress", True):
+                text = (
+                    f"⏳ 排队中：第 {queue.ahead(ticket) + 1} 位，{len(queue.running)} 个任务正在生成"
+                    f"（编号 #{ticket.id}）。轮到后自动开始，发送 /绘图队列 可查看或取消。"
+                )
+                queue_message_id, fallback = await self._start_progress(event, text)
+                if fallback is not None:
+                    yield fallback
+            await queue.wait(ticket)
+            await self._recall_progress_message(event, queue_message_id)
+            queue_message_id = None
+            if ticket.cancelled:
+                raise DrawCancelled()
+            if progress_text and self.config.get("show_progress", True):
+                progress_message_id, fallback = await self._start_progress(event, progress_text)
+                if fallback is not None:
+                    yield fallback
+            ticket.task = asyncio.ensure_future(run())
+            try:
+                state["results"] = await ticket.task
+            except asyncio.CancelledError:
+                if ticket.cancelled:
+                    raise DrawCancelled() from None
+                ticket.task.cancel()
+                raise
+        except DrawCancelled as e:
+            state["error"] = e
+        except Exception as e:  # noqa: BLE001
+            state["error"] = e
+        finally:
+            queue.leave(ticket)
+            await self._recall_progress_message(event, queue_message_id)
+            await self._recall_progress_message(event, progress_message_id)
+
+    def _data_path(self, filename):
+        """运行态数据放在 data 目录，避免插件更新/重装时丢失。"""
+        return os.path.join("data", "plugin_data", "astrbot_plugin_comfyui_draw", filename)
+
+    def _load_json(self, path, default):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return default
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[comfyui_draw] 读取 {path} 失败：{e}")
+            return default
+
+    def _save_json(self, path, data):
+        tmp = path + ".tmp"
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[comfyui_draw] 保存 {path} 失败：{e}")
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _daily_limit(self, kind):
+        key = "daily_limit_cloud" if kind == "cloud" else "daily_limit_local"
+        return self._config_int(key, 0, 0, 100000)
+
+    def _usage_store(self):
+        """{"date": 今天, "local": {uid: 张数}, "cloud": {uid: 张数}}，跨天自动清零。"""
+        today = time.strftime("%Y-%m-%d")
+        usage = getattr(self, "_usage_data", None)
+        if usage is None:
+            usage = self._load_json(self._data_path("draw_usage.json"), {})
+            if not isinstance(usage, dict):
+                usage = {}
+        if usage.get("date") != today:
+            usage = {"date": today}
+        for kind in ("local", "cloud"):
+            if not isinstance(usage.get(kind), dict):
+                usage[kind] = {}
+        self._usage_data = usage
+        return usage
+
+    def _usage_today(self, uid, kind):
+        return int(self._usage_store()[kind].get(str(uid), 0) or 0)
+
+    def _add_usage(self, uid, kind, count):
+        """只在开启了每日上限时计数，避免无意义的写盘。"""
+        if not count or not self._daily_limit(kind):
+            return
+        usage = self._usage_store()
+        usage[kind][str(uid)] = self._usage_today(uid, kind) + int(count)
+        self._save_json(self._data_path("draw_usage.json"), usage)
+
+    # ------------------------------------------------------------------ #
+    # 出图记录（/重画、/我的绘图）
+    # ------------------------------------------------------------------ #
+    def _history_size(self):
+        return self._config_int("history_size", 10, 0, 100)
+
+    def _history(self):
+        history = getattr(self, "_history_data", None)
+        if history is None:
+            history = self._load_json(self._data_path("draw_history.json"), {})
+            if not isinstance(history, dict):
+                history = {}
+            self._history_data = history
+        return history
+
+    def _user_history(self, uid):
+        records = self._history().get(str(uid))
+        return records if isinstance(records, list) else []
+
+    def _record_history(self, uid, kind, prompt, opts, label, images, edit=False):
+        size = self._history_size()
+        if not size:
+            return
+        saved_opts = {}
+        for key, value in (opts or {}).items():
+            if value is None or value == "" or value == []:
+                continue
+            if isinstance(value, (str, int, float, bool)) or (
+                isinstance(value, list) and all(isinstance(v, str) for v in value)
+            ):
+                saved_opts[key] = value
+        record = {
+            "kind": kind,
+            "prompt": str(prompt or ""),
+            "opts": saved_opts,
+            "label": label,
+            "images": int(images),
+            "edit": bool(edit),
+            "time": int(time.time()),
+        }
+        history = self._history()
+        history[str(uid)] = ([record] + self._user_history(uid))[:size]
+        self._save_json(self._data_path("draw_history.json"), history)
+
+    @staticmethod
+    def _describe_record(record):
+        prompt = str(record.get("prompt") or "").strip()
+        preset = (record.get("opts") or {}).get("preset")
+        if preset:
+            prompt = f"[{preset}] {prompt}".strip()
+        if record.get("edit"):
+            prompt = f"(编辑原图) {prompt}".strip()
+        if len(prompt) > 60:
+            prompt = prompt[:60] + "…"
+        return prompt or "（无描述）"
 
     async def _build_result_chain(
         self,
@@ -946,10 +1209,7 @@ class ComfyUIDrawPlugin(Star):
     # 每日二次元的我（每人每天一次，按 用户ID+日期 随机形象，成功出图才计次）
     # ------------------------------------------------------------------ #
     def _daily_me_path(self):
-        """运行态数据放在 data 目录，避免插件更新/重装时丢失。"""
-        return os.path.join(
-            "data", "plugin_data", "astrbot_plugin_comfyui_draw", "daily_me_usage.json"
-        )
+        return self._data_path("daily_me_usage.json")
 
     def _daily_me_load(self):
         # 兼容旧版：首次升级时可从插件目录中的旧文件读取，之后统一写入 data。
@@ -1110,6 +1370,7 @@ class ComfyUIDrawPlugin(Star):
                     reply_to_source=self.config.get("daily_me_reply_source", True),
                     allow_image_edit=False,
                     apply_default_style=False,
+                    count_usage=False,
                 ):
                     yield result
                 return
@@ -1132,6 +1393,7 @@ class ComfyUIDrawPlugin(Star):
                 caption_prefix=desc,
                 daily_card=self.config.get("daily_me_result_card", True),
                 reply_to_source=self.config.get("daily_me_reply_source", True),
+                count_usage=False,
             ):
                 yield result
         finally:
@@ -1149,6 +1411,170 @@ class ComfyUIDrawPlugin(Star):
         self._daily_me_pending.clear()
         self._daily_me_save()
         yield await self._text_result(event, f"🧹 已清空今日「二次元的我」使用记录（{n} 人），大家可以重新抽了。")
+
+    @filter.command("绘图队列", alias={"绘图排队", "drawqueue"})
+    async def draw_queue(self, event: AstrMessageEvent):
+        """查看本地与云端绘图队列。/绘图队列 取消 <编号>：取消自己的任务（管理员可取消任何人的）。"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield await self._text_result(event, notice)
+            return
+        args = self._strip_command(event.message_str, {"绘图队列", "绘图排队", "drawqueue"}).split()
+        if args and args[0].lower() in {"取消", "cancel"}:
+            number = args[1].lstrip("#") if len(args) > 1 else ""
+            if not number.isdigit():
+                yield await self._text_result(event, "用法：/绘图队列 取消 <编号>（编号见 /绘图队列）")
+                return
+            ticket = next((t for t in self._all_tickets() if t.id == int(number)), None)
+            if ticket is None:
+                yield await self._text_result(event, f"找不到编号 #{number} 的任务，可能已经完成了。")
+                return
+            if ticket.uid != self._user_id(event) and not self._is_admin(event):
+                yield await self._text_result(event, "只能取消自己的任务；管理员可以取消任何人的。")
+                return
+            was_running = ticket.running
+            ticket.queue.cancel(ticket)
+            text = f"✅ 已取消任务 #{ticket.id}。"
+            if was_running:
+                text += "\n已经发出的请求无法收回：云端可能仍会计费，ComfyUI 可能仍会把这张图跑完。"
+            yield await self._text_result(event, text)
+            return
+
+        now = time.time()
+        sections, lines = [], []
+        for kind in ("local", "cloud"):
+            queue = self._queue(kind)
+            title = f"{self.QUEUE_LABELS[kind]}（同时 {queue.limit} 个）"
+            rows = []
+            for ticket in queue.tickets():
+                if ticket.running:
+                    desc, tag = f"{ticket.label} · 已生成 {int(now - ticket.started)} 秒", "生成中"
+                else:
+                    desc, tag = f"{ticket.label} · 已排队 {int(now - ticket.created)} 秒", "排队"
+                rows.append({"name": f"#{ticket.id} {ticket.user_name}", "desc": desc, "tag": tag})
+            if rows:
+                sections.append({"title": title, "rows": rows})
+                lines.append(title + "：")
+                lines.extend(f"· {r['name']}（{r['tag']}）{r['desc']}" for r in rows)
+            else:
+                sections.append({"title": title, "lines": ["空闲中"]})
+                lines.append(title + "：空闲中")
+        tips = ["/绘图队列 取消 <编号> 取消自己的任务（管理员可取消任何人的）"]
+        card = {
+            "title": "绘图队列",
+            "subtitle": f"共 {len(self._all_tickets())} 个任务",
+            "sections": sections,
+            "tips": tips,
+        }
+        yield await self._info_card_result(event, card, "\n".join(lines + [""] + tips))
+
+    @filter.command("重画", alias={"再画一张", "redraw"})
+    async def redraw(self, event: AstrMessageEvent):
+        """用上一次（或 /我的绘图 中第 N 条）的描述和参数再画一次。用法：/重画 [序号] [补充描述] [--参数]"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield await self._text_result(event, notice)
+            return
+        if not self._history_size():
+            yield await self._text_result(event, "出图记录已关闭（配置 history_size 为 0），无法重画。")
+            return
+        raw = self._strip_command(event.message_str, {"重画", "再画一张", "redraw"})
+        index = 1
+        parts = raw.split(maxsplit=1)
+        if parts and parts[0].lstrip("#").isdigit():
+            index = int(parts[0].lstrip("#"))
+            raw = parts[1] if len(parts) > 1 else ""
+        records = self._user_history(self._user_id(event))
+        if not records:
+            yield await self._text_result(event, "还没有你的出图记录，先用 /绘图 或 /云绘图 画一张吧～")
+            return
+        if not 1 <= index <= len(records):
+            yield await self._text_result(event, f"你只有 {len(records)} 条出图记录，发送 /我的绘图 查看。")
+            return
+        record = records[index - 1]
+        cloud = record.get("kind") == "cloud"
+        extra_prompt, extra_opts = self._parse_args(raw, cloud=cloud)
+        opts = self._parse_args("", cloud=cloud)[1]
+        opts.update(record.get("opts") or {})
+        for key, value in extra_opts.items():
+            if value not in (None, "", []):
+                opts[key] = value
+        if not cloud and extra_opts.get("seed") is None:
+            opts["seed"] = None  # 本地重画默认换一个随机种子
+        prompt = str(record.get("prompt") or "").strip()
+        if extra_prompt:
+            prompt = f"{prompt}，{extra_prompt}" if prompt else extra_prompt
+        if cloud:
+            edit = bool(record.get("edit"))
+            async for result in self._render_openai(
+                event, prompt, opts, record=True, allow_image_edit=edit, require_source=edit
+            ):
+                yield result
+        else:
+            async for result in self._render(event, prompt, opts, record=True):
+                yield result
+
+    @filter.command("我的绘图", alias={"绘图记录", "drawhistory"})
+    async def my_draws(self, event: AstrMessageEvent):
+        """查看自己最近的出图记录和今日剩余次数。/我的绘图 清空：删除自己的记录。"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield await self._text_result(event, notice)
+            return
+        uid = self._user_id(event)
+        args = self._strip_command(event.message_str, {"我的绘图", "绘图记录", "drawhistory"}).split()
+        if args and args[0] in {"清空", "clear"}:
+            history = self._history()
+            if history.pop(uid, None) is not None:
+                self._save_json(self._data_path("draw_history.json"), history)
+            yield await self._text_result(event, "✅ 已清空你的出图记录。")
+            return
+
+        sections, lines = [], []
+        usage_lines = []
+        for kind in ("local", "cloud"):
+            limit = self._daily_limit(kind)
+            if limit and not self._is_admin(event):
+                used = self._usage_today(uid, kind)
+                usage_lines.append(f"{self.QUEUE_LABELS[kind]}：已用 {used}/{limit} 张，还剩 {max(0, limit - used)} 张")
+        if usage_lines:
+            sections.append({"title": "📅 今日次数", "lines": usage_lines})
+            lines.extend(["今日次数："] + usage_lines + [""])
+
+        records = self._user_history(uid)
+        if not self._history_size():
+            sections.append({"title": "🖼️ 最近出图", "lines": ["出图记录已关闭（配置 history_size 为 0）"]})
+            lines.append("出图记录已关闭。")
+        elif not records:
+            sections.append({"title": "🖼️ 最近出图", "lines": ["还没有记录，先用 /绘图 或 /云绘图 画一张吧～"]})
+            lines.append("还没有出图记录。")
+        else:
+            rows = []
+            for i, record in enumerate(records, 1):
+                when = time.strftime("%m-%d %H:%M", time.localtime(int(record.get("time") or 0)))
+                rows.append({
+                    "name": f"{i}. {self._describe_record(record)}",
+                    "desc": f"{when} · {record.get('label', '')} · {record.get('images', 1)} 张",
+                    "tag": "云端" if record.get("kind") == "cloud" else "本地",
+                })
+            sections.append({"title": "🖼️ 最近出图", "rows": rows})
+            lines.append("最近出图：")
+            lines.extend(f"{r['name']}（{r['tag']} · {r['desc']}）" for r in rows)
+        tips = [
+            "/重画 再画最近一张；/重画 3 重画第 3 条",
+            "/重画 加上猫耳 --竖图 可以补充描述或改参数",
+            "/我的绘图 清空 删除自己的记录",
+        ]
+        card = {
+            "title": "我的绘图",
+            "subtitle": f"{self._user_name(event)} 的画室记录",
+            "sections": sections,
+            "tips": tips,
+        }
+        yield await self._info_card_result(event, card, "\n".join(lines + [""] + tips))
 
     @filter.command("绘图列表", alias={"drawlist", "comfyui_list"})
     async def draw_list(self, event: AstrMessageEvent):
@@ -1250,10 +1676,13 @@ class ComfyUIDrawPlugin(Star):
                     {"cmd": "/云绘图 <提示词>", "desc": "云端 GPT-Image 出图；附带或引用图片时自动编辑原图", "admin": False},
                     {"cmd": "/变手办", "desc": "引用/附带原图，一键转换成收藏级手办", "admin": False},
                     {"cmd": "/二次元的我", "desc": "抽取今日的二次元少女形象 · 每人每天一次（别名 每日二次元）", "admin": False},
+                    {"cmd": "/重画 [序号] [补充]", "desc": "用上一次的描述和参数再画一次，可补充描述或改参数", "admin": False},
                 ]},
                 {"title": "🔧 查询与管理", "items": [
                     {"cmd": "/绘图列表", "desc": "查看可用工作流", "admin": False},
                     {"cmd": "/绘图状态", "desc": "检查 ComfyUI 是否在线", "admin": False},
+                    {"cmd": "/绘图队列 [取消 编号]", "desc": "查看谁在画、谁在排队；可取消自己的任务", "admin": False},
+                    {"cmd": "/我的绘图", "desc": "查看自己最近的出图记录和今日剩余次数", "admin": False},
                     {"cmd": "/云绘图预设", "desc": "查看手办、头像、海报等云绘图快捷预设", "admin": False},
                     {"cmd": "/云绘图切换 [方案] [模型]", "desc": "查看云绘图方案；切换方案或模型仅限管理员", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
@@ -1438,7 +1867,7 @@ class ComfyUIDrawPlugin(Star):
             "steps": None, "cfg": None, "seed": None, "batch": None,
             "workflow": wf or None,
         }
-        async for result in self._render(event, p, opts):
+        async for result in self._render(event, p, opts, record=True):
             yield result
 
     @filter.command("云绘图", alias={"gptdraw", "gptimage", "clouddraw", "gpt绘图"})
@@ -1466,7 +1895,7 @@ class ComfyUIDrawPlugin(Star):
                 "也可以引用一张原图发送：/变手办"
             )
             return
-        async for result in self._render_openai(event, prompt, opts):
+        async for result in self._render_openai(event, prompt, opts, record=True):
             yield result
 
     @filter.command("变手办", alias={"手办化", "figureme"})
@@ -1480,7 +1909,7 @@ class ComfyUIDrawPlugin(Star):
         raw = self._strip_command(event.message_str, {"变手办", "手办化", "figureme"})
         prompt, opts = self._parse_args(raw, cloud=True)
         opts["preset"] = "手办"
-        async for result in self._render_openai(event, prompt, opts):
+        async for result in self._render_openai(event, prompt, opts, record=True):
             yield result
 
     @filter.command("云绘图预设", alias={"云预设", "gpt预设", "cloudpresets"})
@@ -1698,7 +2127,7 @@ class ComfyUIDrawPlugin(Star):
             return
         opts = {"size": (size or "").strip() or None, "batch": None,
                 "negative": None, "steps": None, "cfg": None, "seed": None, "workflow": None}
-        async for result in self._render_openai(event, p, opts):
+        async for result in self._render_openai(event, p, opts, record=True):
             yield result
 
     async def _render_openai(
@@ -1712,8 +2141,15 @@ class ComfyUIDrawPlugin(Star):
         reply_to_source: bool = False,
         allow_image_edit: bool = True,
         apply_default_style: bool = True,
+        record: bool = False,
+        count_usage: bool = True,
+        require_source: bool = False,
     ):
-        """共享云端出图流程；有原图时自动图片编辑，否则文生图。"""
+        """共享云端出图流程；有原图时自动图片编辑，否则文生图。
+        record / count_usage 同 _render；require_source：必须带原图（重画原图编辑时）。"""
+        original_prompt, original_opts = prompt, dict(opts or {})
+        # 开始时固定接口方案，出图途中管理员切换方案也不影响本次请求和结果卡片。
+        conn = self._cloud_connection()
         try:
             opts = dict(opts or {})
             size_was_explicit = bool(str(opts.get("size") or "").strip())
@@ -1725,6 +2161,8 @@ class ComfyUIDrawPlugin(Star):
                         "openai_image_edit_max_inputs", 4, 1, 4
                     ),
                 )
+            if require_source and not source_images:
+                raise ComfyUIError("上一次是原图编辑，原图不会保存；请引用或附带原图后再发送。")
             if not str(prompt or "").strip():
                 if source_images:
                     prompt = (
@@ -1769,7 +2207,7 @@ class ComfyUIDrawPlugin(Star):
             n = min(n, 4)
         quality = (opts.get("quality") or "").strip() or str(self.config.get("openai_image_quality", "") or "").strip() or None
         style = (opts.get("style") or "").strip() or str(self.config.get("openai_image_style", "") or "").strip() or None
-        is_antigravity = self._openai_image_provider() == "sub2api-antigravity"
+        is_antigravity = conn["provider"] == "sub2api-antigravity"
         if is_antigravity:
             # GPT-Image 的 high/hd 等默认值不应覆盖 Gemini 独立清晰度设置。
             quality = (opts.get("quality") or "").strip() or None
@@ -1781,11 +2219,16 @@ class ComfyUIDrawPlugin(Star):
                 yield await self._text_result(event, f"❌ 参数错误：{e}")
                 return
 
+        rejected = self._admission_error(event, "cloud", n if count_usage else 0)
+        if rejected:
+            yield await self._text_result(event, rejected)
+            return
+
         self._sweep_temp()
-        progress_message_id = None
+        progress_text = ""
         if self.config.get("show_progress", True):
             parts = []
-            profile_name = self._active_cloud_profile()[0]
+            profile_name = conn["name"]
             if profile_name != self.DEFAULT_CLOUD_PROFILE:
                 parts.append(f"方案={profile_name}")
             if preset_name:
@@ -1805,37 +2248,60 @@ class ComfyUIDrawPlugin(Star):
             action = "编辑原图" if source_images else "生成"
             backend_label = "Antigravity/Gemini" if is_antigravity else "GPT-Image"
             progress_text = f"🎨 正在用云端 {backend_label} {action}（" + " · ".join(parts) + "）..."
-            progress_message_id, fallback = await self._start_progress(event, progress_text)
-            if fallback is not None:
-                yield fallback
 
-        results = []
+        def run():
+            if source_images:
+                return self._run_openai_image_edit(
+                    prompt, source_images, size_str, n, quality=quality, conn=conn
+                )
+            return self._run_openai_image(
+                prompt, size_str, n, quality=quality, style=style, conn=conn
+            )
+
+        model = conn["model"]
+        state = {}
+        async for message in self._generate_in_queue(
+            event,
+            "cloud",
+            f"云端·{model}" + ("（编辑原图）" if source_images else ""),
+            progress_text,
+            run,
+            state,
+            count=n if count_usage else 0,
+        ):
+            yield message
+        results = state.get("results") or []
+        error = state.get("error")
         generation_error = None
-        try:
-            async with self._sem:
-                if source_images:
-                    results = await self._run_openai_image_edit(
-                        prompt, source_images, size_str, n, quality=quality
-                    )
-                else:
-                    results = await self._run_openai_image(
-                        prompt, size_str, n, quality=quality, style=style
-                    )
-        except ComfyUIError as e:
-            generation_error = f"❌ {e}"
-            results = getattr(e, "partial_results", [])
-        except asyncio.TimeoutError:
-            generation_error = "❌ 云端绘图超时，请稍后再试或减少张数。"
-        except Exception as e:  # noqa: BLE001
-            logger.exception("[comfyui_draw] 云端绘图出错")
-            generation_error = f"❌ 云端绘图出错：{type(e).__name__}: {e}"
-        finally:
-            await self._recall_progress_message(event, progress_message_id)
+        if error is not None:
+            if isinstance(error, (DrawRejected, DrawCancelled)):
+                generation_error = self._queue_error_text(error)
+            elif isinstance(error, ComfyUIError):
+                generation_error = f"❌ {error}"
+                results = getattr(error, "partial_results", [])
+            elif isinstance(error, asyncio.TimeoutError):
+                seconds = self._config_int("openai_image_timeout", 360, 1, 3600)
+                generation_error = (
+                    f"❌ 云端绘图超时（超过 {seconds} 秒，配置项 openai_image_timeout），"
+                    "请稍后再试或减少张数。"
+                )
+            else:
+                logger.error(f"[comfyui_draw] 云端绘图出错：{error!r}")
+                generation_error = f"❌ 云端绘图出错：{type(error).__name__}: {error}"
 
         if generation_error:
             yield await self._text_result(event, generation_error)
             if not results:
                 return
+
+        uid = self._user_id(event)
+        if count_usage:
+            self._add_usage(uid, "cloud", len(results))
+        if record:
+            self._record_history(
+                uid, "cloud", original_prompt, original_opts, f"云端·{model}",
+                len(results), edit=bool(source_images),
+            )
 
         effective = {}
         if is_antigravity and results:
@@ -1849,7 +2315,6 @@ class ComfyUIDrawPlugin(Star):
                 effective["width"] = int(width)
                 effective["height"] = int(height)
 
-        model = self._cloud_image_model()
         chain = await self._build_result_chain(
             event,
             results,
@@ -2190,9 +2655,10 @@ class ComfyUIDrawPlugin(Star):
             )
         return results
 
-    async def _run_antigravity_image(self, prompt, size=None, n=1, source_images=None, quality=None, style=None):
+    async def _run_antigravity_image(self, prompt, size=None, n=1, source_images=None, quality=None, style=None,
+                                     conn=None):
         """原生绘图；仅对明确的比例参数 400 拒绝做一次兼容回退。"""
-        conn = self._cloud_connection()
+        conn = conn or self._cloud_connection()
         base, key = conn["base_url"], conn["api_key"]
         if not base or not key:
             raise ComfyUIError(
@@ -2226,7 +2692,7 @@ class ComfyUIDrawPlugin(Star):
         if aspect_mode == "prompt" or (aspect_mode == "auto" and url in disabled_urls):
             body = self._gemini_without_aspect_ratio(body)
         count = self._clamp_batch(int(n))
-        seconds = self._config_int("openai_image_timeout", 180, 1, 3600)
+        seconds = self._config_int("openai_image_timeout", 360, 1, 3600)
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         text_only_retry = bool(self.config.get("gemini_text_only_retry", True))
         results = []
@@ -2287,7 +2753,10 @@ class ComfyUIDrawPlugin(Star):
             return await asyncio.wait_for(generate(), timeout=seconds)
         except Exception as e:  # noqa: BLE001
             if isinstance(e, asyncio.TimeoutError):
-                message = "Antigravity 绘图超时，请减少张数或提高云端绘图超时时间。"
+                message = (
+                    f"Antigravity 绘图超时（超过 {seconds} 秒，配置项 openai_image_timeout），"
+                    "请减少张数或提高超时时间。"
+                )
             elif isinstance(e, ComfyUIError):
                 message = str(e)
             else:
@@ -2299,7 +2768,7 @@ class ComfyUIDrawPlugin(Star):
             error.partial_results = results
             raise error from None
 
-    def _openai_image_urls(self, base: str) -> list[str]:
+    def _openai_image_urls(self, base: str, provider: str = None) -> list[str]:
         """按接口类型生成候选地址，并避免重复拼接接口路径。"""
         base = str(base or "").strip().rstrip("/")
         if base.endswith("/images/generations"):
@@ -2310,11 +2779,11 @@ class ComfyUIDrawPlugin(Star):
             return [direct_url]
 
         v1_url = base + "/v1/images/generations"
-        if self._openai_image_provider() == "auto":
+        if (provider or self._openai_image_provider()) == "auto":
             return [direct_url, v1_url]
         return [direct_url]
 
-    def _openai_image_edit_urls(self, base: str) -> list[str]:
+    def _openai_image_edit_urls(self, base: str, provider: str = None) -> list[str]:
         """生成 /images/edits 候选地址，兼容根地址、/v1 和完整接口地址。"""
         base = str(base or "").strip().rstrip("/")
         if base.endswith("/images/edits"):
@@ -2327,7 +2796,7 @@ class ComfyUIDrawPlugin(Star):
             return [direct_url]
 
         v1_url = base + "/v1/images/edits"
-        if self._openai_image_provider() == "auto":
+        if (provider or self._openai_image_provider()) == "auto":
             return [direct_url, v1_url]
         return [direct_url]
 
@@ -2342,12 +2811,12 @@ class ComfyUIDrawPlugin(Star):
         return value
 
     async def _run_openai_image(self, prompt: str, size: str = None, n: int = 1,
-                                quality: str = None, style: str = None):
+                                quality: str = None, style: str = None, conn: dict = None):
         """调用 OpenAI 兼容的 /images/generations 接口，返回 list[(bytes, filename)]。
-        失败抛出 ComfyUIError / asyncio.TimeoutError。"""
-        if self._openai_image_provider() == "sub2api-antigravity":
-            return await self._run_antigravity_image(prompt, size, n, quality=quality, style=style)
-        conn = self._cloud_connection()
+        conn 为本次固定的接口方案，省略时取当前方案。失败抛出 ComfyUIError / asyncio.TimeoutError。"""
+        conn = conn or self._cloud_connection()
+        if conn["provider"] == "sub2api-antigravity":
+            return await self._run_antigravity_image(prompt, size, n, quality=quality, style=style, conn=conn)
         base, key, model = conn["base_url"].rstrip("/"), conn["api_key"], conn["model"]
         if not base:
             raise ComfyUIError(
@@ -2360,7 +2829,7 @@ class ComfyUIDrawPlugin(Star):
                 + self._cloud_profile_hint(conn) + "。"
             )
 
-        urls = self._openai_image_urls(base)
+        urls = self._openai_image_urls(base, conn["provider"])
         body = {"model": model, "prompt": prompt, "n": max(1, int(n))}
         sz = size or str(self.config.get("openai_image_size", "") or "").strip()
         if sz:
@@ -2374,7 +2843,7 @@ class ComfyUIDrawPlugin(Star):
             body["response_format"] = rf
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
         timeout = aiohttp.ClientTimeout(
-            total=self._config_int("openai_image_timeout", 180, 1, 3600)
+            total=self._config_int("openai_image_timeout", 360, 1, 3600)
         )
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -2396,13 +2865,14 @@ class ComfyUIDrawPlugin(Star):
         size: str = None,
         n: int = 1,
         quality: str = None,
+        conn: dict = None,
     ):
         """调用 OpenAI 兼容的 /images/edits，以 multipart 上传一张或多张原图。"""
-        if self._openai_image_provider() == "sub2api-antigravity":
+        conn = conn or self._cloud_connection()
+        if conn["provider"] == "sub2api-antigravity":
             if not source_images:
                 raise ComfyUIError("图片编辑需要至少一张原图。")
-            return await self._run_antigravity_image(prompt, size, n, source_images, quality=quality)
-        conn = self._cloud_connection()
+            return await self._run_antigravity_image(prompt, size, n, source_images, quality=quality, conn=conn)
         base, key, model = conn["base_url"].rstrip("/"), conn["api_key"], conn["model"]
         if not base:
             raise ComfyUIError(
@@ -2417,13 +2887,13 @@ class ComfyUIDrawPlugin(Star):
         if not source_images:
             raise ComfyUIError("图片编辑需要至少一张原图。")
 
-        urls = self._openai_image_edit_urls(base)
+        urls = self._openai_image_edit_urls(base, conn["provider"])
         count = max(1, min(4, int(n)))
         sz = size or str(self.config.get("openai_image_size", "") or "").strip()
         rf = self._openai_image_response_format()
         headers = {"Authorization": f"Bearer {key}"}
         timeout = aiohttp.ClientTimeout(
-            total=self._config_int("openai_image_timeout", 180, 1, 3600)
+            total=self._config_int("openai_image_timeout", 360, 1, 3600)
         )
 
         def build_form():
@@ -3569,6 +4039,9 @@ class ComfyUIDrawPlugin(Star):
             "/绘图状态              检查 ComfyUI 是否在线（别名 drawstatus）\n"
             "/绘图默认 [工作流名]    查看 / 切换默认工作流（别名 drawdefault）\n"
             "/二次元的我          抽取今日的二次元少女形象，每人每天一次（别名 每日二次元）\n"
+            "/重画 [序号] [补充]     用上一次的描述和参数再画一次（别名 redraw）\n"
+            "/我的绘图              查看自己最近的出图记录和今日剩余次数（别名 绘图记录）\n"
+            "/绘图队列 [取消 编号]   查看排队情况，取消自己的任务（别名 drawqueue）\n"
             "/绘图主题 [主题名]      查看 / 切换帮助卡片主题（切换仅管理员）\n"
             "/绘图帮助              显示本帮助（别名 drawhelp）\n"
             "\n"

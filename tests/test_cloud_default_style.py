@@ -11,11 +11,11 @@ def cloud(**config):
     obj = plugin({"show_progress": False, **config})
     calls = []
 
-    async def fake_generate(prompt, size=None, n=1, quality=None, style=None):
+    async def fake_generate(prompt, size=None, n=1, quality=None, style=None, **_kwargs):
         calls.append(("generate", prompt, style))
         return [(PNG, "gemini_0.png")]
 
-    async def fake_edit(prompt, sources, size=None, n=1, quality=None):
+    async def fake_edit(prompt, sources, size=None, n=1, quality=None, **_kwargs):
         calls.append(("edit", prompt, None))
         return [(PNG, "gemini_0.png")]
 
