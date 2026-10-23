@@ -113,6 +113,33 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             return True  # 群白名单：该群内所有人都能用
         return False
 
+    # 本地 ComfyUI 与云端绘图各自的总开关；关闭时对所有人（含管理员）生效。
+    DRAW_SWITCHES = {
+        "local": ("enable_local_draw", "本地绘图", "/绘图"),
+        "cloud": ("enable_cloud_draw", "云绘图", "/云绘图"),
+    }
+    DRAW_SWITCH_NAMES = {
+        "本地": "local", "绘图": "local", "本地绘图": "local", "comfyui": "local", "local": "local",
+        "云端": "cloud", "云绘图": "cloud", "云": "cloud", "cloud": "cloud",
+    }
+    SWITCH_ON = {"开", "开启", "打开", "on", "1", "true", "enable"}
+    SWITCH_OFF = {"关", "关闭", "off", "0", "false", "disable"}
+
+    def _draw_enabled(self, kind):
+        value = self.config.get(self.DRAW_SWITCHES[kind][0], True)
+        if isinstance(value, str):
+            return value.strip().lower() not in self.SWITCH_OFF
+        return bool(value)
+
+    def _draw_disabled_notice(self, kind):
+        """功能关闭时的提示；另一边开着时顺便提一句。"""
+        _, label, _ = self.DRAW_SWITCHES[kind]
+        other = "cloud" if kind == "local" else "local"
+        text = f"⚠️ {label}已关闭，暂时不能使用。"
+        if self._draw_enabled(other):
+            text += f"\n可以先用 {self.DRAW_SWITCHES[other][2]}。"
+        return text
+
     def _deny_notice(self):
         """无权限时是否回复提示，返回提示文本或 None。"""
         if self.config.get("access_deny_notice", True):
@@ -163,6 +190,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
         reply_to_source：在最终消息开头引用用户触发本次绘图的原消息。
         record：成功后写入出图记录，供 /重画 与 /我的绘图 使用。
         count_usage：成功后计入每日次数（「二次元的我」有自己的限次，不计入）。"""
+        if not self._draw_enabled("local"):
+            yield await self._text_result(event, self._draw_disabled_notice("local"))
+            return
         original_prompt, original_opts = prompt, dict(opts or {})
         try:
             opts = self._normalize_options(prompt, opts, cloud=False)
@@ -1331,6 +1361,42 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
         }
         yield await self._info_card_result(event, card, "\n".join(lines + [""] + tips))
 
+    @filter.command("绘图开关", alias={"drawswitch"})
+    async def draw_switch(self, event: AstrMessageEvent):
+        """查看或切换本地绘图、云绘图的开关。用法：/绘图开关 [本地|云端] [开|关]（切换仅管理员）"""
+        if not self._access_allowed(event):
+            notice = self._deny_notice()
+            if notice:
+                yield await self._text_result(event, notice)
+            return
+        args = self._strip_command(event.message_str, {"绘图开关", "drawswitch"}).split()
+        if not args:
+            rows = []
+            for kind, (key, label, cmd) in self.DRAW_SWITCHES.items():
+                on = self._draw_enabled(kind)
+                rows.append({"name": label, "desc": f"{cmd} 等指令（配置 {key}）", "tag": "开启" if on else "关闭"})
+            tips = ["/绘图开关 本地 关 · /绘图开关 云端 开（切换仅限管理员）"]
+            card = {"title": "绘图开关", "subtitle": "本地 ComfyUI 和云端各管各的",
+                    "sections": [{"title": "🔌 当前状态", "rows": rows}], "tips": tips}
+            text = "\n".join(f"{r['name']}：{r['tag']}" for r in rows) + "\n\n" + tips[0]
+            yield await self._info_card_result(event, card, text)
+            return
+        if not self._is_admin(event):
+            yield await self._text_result(event, "只有管理员能切换绘图开关。")
+            return
+        kind = self.DRAW_SWITCH_NAMES.get(args[0].lower())
+        state = args[1].lower() if len(args) > 1 else ""
+        if kind is None or len(args) != 2 or state not in self.SWITCH_ON | self.SWITCH_OFF:
+            yield await self._text_result(event, "用法：/绘图开关 [本地|云端] [开|关]，例如 /绘图开关 云端 关")
+            return
+        key, label, _ = self.DRAW_SWITCHES[kind]
+        on = state in self.SWITCH_ON
+        self.config[key] = on
+        text = f"✅ {label}已{'开启' if on else '关闭'}。"
+        if not self._save_config():
+            text += "\n⚠️ 写回配置文件失败，重启 / 重载后可能恢复原值。"
+        yield await self._text_result(event, text)
+
     @filter.command("绘图列表", alias={"drawlist", "comfyui_list"})
     async def draw_list(self, event: AstrMessageEvent):
         """列出可用的工作流。"""
@@ -1443,6 +1509,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
                     {"cmd": "/绘图主题 [主题名]", "desc": "查看帮助卡片主题；切换仅限管理员", "admin": True},
+                    {"cmd": "/绘图开关 [本地|云端] [开|关]", "desc": "查看本地绘图 / 云绘图开关；切换仅限管理员", "admin": True},
                     {"cmd": "/绘图帮助", "desc": "显示这张帮助卡片", "admin": False},
                 ]},
             ]
@@ -1902,6 +1969,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
     ):
         """共享云端出图流程；有原图时自动图片编辑，否则文生图。
         record / count_usage 同 _render；require_source：必须带原图（重画原图编辑时）。"""
+        if not self._draw_enabled("cloud"):
+            yield await self._text_result(event, self._draw_disabled_notice("cloud"))
+            return
         original_prompt, original_opts = prompt, dict(opts or {})
         # 开始时固定接口方案，出图途中管理员切换方案也不影响本次请求和结果卡片。
         conn = self._cloud_connection()
@@ -2404,6 +2474,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             "/我的绘图              查看自己最近的出图记录和今日剩余次数（别名 绘图记录）\n"
             "/绘图队列 [取消 编号]   查看排队情况，取消自己的任务（别名 drawqueue）\n"
             "/绘图主题 [主题名]      查看 / 切换帮助卡片主题（切换仅管理员）\n"
+            "/绘图开关 [本地|云端] [开|关]  查看 / 切换本地绘图和云绘图开关（切换仅管理员）\n"
             "/绘图帮助              显示本帮助（别名 drawhelp）\n"
             "\n"
             "【可选参数】（都可省略）\n"

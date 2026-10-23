@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.14.1-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.15.0-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -129,6 +129,7 @@ AstrBot/
 | `openai_image_edit_max_inputs` | 云端图片编辑最多读取几张原图，默认 4；支持当前消息和引用消息。 |
 | `openai_image_edit_use_source_size` | 图生图未写 `--size` 时沿用第一张原图分辨率，默认开启。 |
 | `openai_image_timeout` | 云端绘图超时（秒），默认 360；从轮到该任务开始计时，排队时间不算。 |
+| `enable_local_draw` / `enable_cloud_draw` | 本地绘图（ComfyUI）/ 云绘图的总开关，默认都开。关闭后对应的指令、AI 绘图工具、`/重画` 和「二次元的我」都会提示已关闭，对管理员同样生效。可用 `/绘图开关` 在线切换。 |
 | `enable_access_control` | 启用白名单访问控制（默认关，关时所有人可用）。 |
 | `user_whitelist` | 个人白名单（用户 ID 列表），这些用户私聊 / 群聊都能用。 |
 | `group_whitelist` | 群白名单（群 ID 列表），这些群里所有人都能用。 |
@@ -231,6 +232,7 @@ AstrBot/
 | `/重画` | 用上一次（或第 N 条记录）的描述和参数再画一次；可补充描述或改参数。本地重画默认换随机种子；原图编辑需重新引用原图 | `/再画一张`、`/redraw` |
 | `/我的绘图` | 查看自己最近的出图记录和今日剩余次数；`/我的绘图 清空` 删除自己的记录 | `/绘图记录`、`/drawhistory` |
 | `/绘图队列` | 查看本地与云端正在生成和排队的任务；`/绘图队列 取消 <编号>` 取消自己的任务，管理员可取消任何人的 | `/绘图排队`、`/drawqueue` |
+| `/绘图开关` | 查看本地绘图和云绘图是否开启；管理员可单独开关，如 `/绘图开关 云端 关`，全局生效并写回配置 | `/drawswitch` |
 | `/绘图主题` | 查看帮助卡片主题；仅管理员可切换（默认 / 神社 / 博丽灵梦），全局生效 | `/帮助主题`、`/drawtheme` |
 | `/绘图默认` | 所有人可查看；仅管理员可切换默认工作流并持久保存 | `/drawdefault`、`/setdefault` |
 | `/绘图帮助` | 查看完整使用帮助（含当前可用工作流） | `/drawhelp`、`/comfyhelp` |

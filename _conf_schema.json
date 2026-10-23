@@ -446,6 +446,18 @@
     "hint": "从轮到该任务开始计时（排队时间不算）。接口较慢时请调高。",
     "default": 360
   },
+  "enable_local_draw": {
+    "type": "bool",
+    "description": "启用本地绘图（ComfyUI）",
+    "hint": "关闭后 /绘图、/重画 本地记录、AI 绘图工具 draw_image 和本地模式的「二次元的我」都会提示已关闭，对管理员同样生效。可用 /绘图开关 在线切换。",
+    "default": true
+  },
+  "enable_cloud_draw": {
+    "type": "bool",
+    "description": "启用云绘图",
+    "hint": "关闭后 /云绘图、/变手办、/重画 云端记录、AI 绘图工具 draw_image_gpt 和云端模式的「二次元的我」都会提示已关闭，对管理员同样生效。可用 /绘图开关 在线切换。",
+    "default": true
+  },
   "enable_access_control": {
     "type": "bool",
     "description": "启用白名单访问控制",
