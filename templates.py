@@ -54,6 +54,7 @@ DRAW_HELP_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (820 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif; background: #eef0fb; }
@@ -158,6 +159,7 @@ CLOUD_PRESET_CARD_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (760 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -342,6 +344,7 @@ DAILY_ME_CARD_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width=1280, height=10"/>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; width: 100%; background: #fbefee; }
@@ -477,6 +480,7 @@ SHRINE_HELP_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (820 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -653,6 +657,7 @@ REIMU_HELP_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (820 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -870,6 +875,7 @@ REIMU_INFO_CARD_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (640 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -997,6 +1003,7 @@ REIMU_NOTICE_CARD_TMPL = """
 <html>
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width={{ (540 * (scale | default(2))) | int }}, height=10"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {

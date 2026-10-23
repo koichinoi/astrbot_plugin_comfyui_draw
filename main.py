@@ -430,6 +430,14 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             return Comp.Image.fromBase64(value.split(";base64,", 1)[1])
         return Comp.Image.fromFileSystem(value)
 
+    @staticmethod
+    def _card_render_options(card_width, scale=2):
+        """卡片截图参数：视口宽对齐卡片、高给最小值，full_page 时图片按内容裁剪，不留大片空白；JPEG 质量提到 95。"""
+        return {
+            "full_page": True, "type": "jpeg", "quality": 95,
+            "viewport_width": int(card_width * scale), "viewport_height": 10,
+        }
+
     _asset_uri_cache = {}
 
     @classmethod
@@ -468,7 +476,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
         if self.config.get("text_as_card", True) and str(text or "").strip():
             data = {"scale": 2, "illust": self._asset_data_uri("reimu_avatar.jpg"), **self._notice_card_data(text)}
             try:
-                rendered = await self.html_render(REIMU_NOTICE_CARD_TMPL, data)
+                rendered = await self.html_render(
+                    REIMU_NOTICE_CARD_TMPL, data, options=self._card_render_options(540)
+                )
                 if rendered:
                     return event.image_result(rendered)
             except Exception as e:  # noqa: BLE001
@@ -479,7 +489,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
         """把信息渲染成博丽灵梦风格卡片；渲染失败时退回文字。"""
         data = {"scale": 2, "illust": self._asset_data_uri("reimu_avatar.jpg"), **card}
         try:
-            rendered = await self.html_render(REIMU_INFO_CARD_TMPL, data)
+            rendered = await self.html_render(
+                REIMU_INFO_CARD_TMPL, data, options=self._card_render_options(640)
+            )
             if rendered:
                 return event.image_result(rendered)
         except Exception as e:  # noqa: BLE001
@@ -533,7 +545,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                 "meta": self._fmt_parts(effective) + f" · 工作流={workflow_name}",
                 "footer": footer,
             }
-            return await self.html_render(DAILY_ME_CARD_TMPL, data)
+            return await self.html_render(
+                DAILY_ME_CARD_TMPL, data, options=self._card_render_options(1280, scale=1)
+            )
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[comfyui_draw] 每日二次元资料卡渲染失败，退回普通消息：{e}")
             return None
@@ -1543,7 +1557,9 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                 "illust": self._asset_data_uri("reimu_avatar.jpg"),
                 "scale": 2,
             }
-            return await self.html_render(self._help_card_template(), data)
+            return await self.html_render(
+                self._help_card_template(), data, options=self._card_render_options(820)
+            )
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[comfyui_draw] 帮助卡片渲染失败，改用文字帮助：{e}")
             return None
@@ -1939,7 +1955,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                     "illust": self._asset_data_uri("reimu_avatar.jpg"),
                     "scale": 2,
                 },
-                options={"full_page": True, "type": "jpeg", "quality": 95},
+                options=self._card_render_options(760),
             )
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[comfyui_draw] 云绘图预设卡片渲染失败，改用文字：{e}")
