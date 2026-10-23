@@ -481,7 +481,7 @@ async def test_daily_me_card_reply_and_original():
     async def no_input(_event, _workflow, _seed):
         return None
 
-    async def fake_html_render(_template, data):
+    async def fake_html_render(_template, data, **_kwargs):
         captured_card.update(data)
         return "C:/temp/daily-card.png"
 
