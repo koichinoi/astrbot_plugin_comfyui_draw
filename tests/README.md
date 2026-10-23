@@ -32,4 +32,4 @@ python tests/test_preset_market.py
 
 测试会像 AstrBot 一样把插件目录作为包加载，因此 `main.py` 可以相对导入 `presets.py` 与 `templates.py`。
 - `test_reimu_presets.py`：博丽神社限定预设（巫女、参拜、御守、符卡）的参数与别名、`/云绘图预设` 灵梦风卡片分组与缺图兜底、文字兜底分组。
-- `test_preset_market.py`：预设市场索引校验（自带的 market/presets.json 不和内置预设重名）、`/预设搜索` 缓存与连不上时的提示、按编号或名字导入、导入后可用 `--名字`、重名拒绝、删除，以及 `/云绘图预设` 卡片和文字兜底的「已导入」分组。
+- `test_preset_market.py`：预设市场索引校验（自带的 market/presets.json 不和内置预设重名）、`/预设搜索` 缓存、翻页与连不上时的提示、按编号或名字导入、导入后可用 `--名字`、重名拒绝、删除，以及 `/云绘图预设` 卡片和文字兜底的「已导入」分组。

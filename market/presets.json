@@ -260,6 +260,637 @@
         "八十年代"
       ],
       "prompt": "Reimagine the described subject in a vaporwave and synthwave aesthetic. Use a glowing neon pink and cyan palette, a retro sunset with horizontal stripes, a wireframe grid floor, palm trees, classical marble bust motifs, chrome highlights, light VHS scanlines, and a dreamy 1980s retro-futuristic mood. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "治愈动画",
+      "icon": "🍃",
+      "desc": "手绘田园风动画电影",
+      "size": "1536x1024",
+      "aliases": [
+        "pastoral",
+        "治愈系"
+      ],
+      "tags": [
+        "动画",
+        "手绘",
+        "温暖",
+        "风景"
+      ],
+      "prompt": "Depict the described subject as a still from a hand-painted pastoral fantasy animated film. Use lush watercolor-like painted backgrounds, fluffy towering cumulus clouds, rolling green hills, warm nostalgic sunlight, soft clean character lineart with simple cel shading, and a gentle, heartwarming everyday-magic atmosphere. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "光影动画",
+      "icon": "🌇",
+      "desc": "唯美光影动画天空",
+      "size": "1536x1024",
+      "aliases": [
+        "skyanime",
+        "唯美"
+      ],
+      "tags": [
+        "动画",
+        "天空",
+        "光影",
+        "青春"
+      ],
+      "prompt": "Render the described subject as a breathtaking frame from a modern romantic anime film. Use an ultra-detailed luminous sky with glowing clouds, dramatic sunbeams and lens flare, sparkling light particles, crisp photoreal city or countryside background art, rich saturated blues and golden-hour oranges, and an emotional youthful mood. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "厚涂",
+      "icon": "🎨",
+      "desc": "厚涂数字绘画",
+      "size": "1024x1536",
+      "aliases": [
+        "impasto",
+        "厚涂插画"
+      ],
+      "tags": [
+        "插画",
+        "数字绘画",
+        "质感"
+      ],
+      "prompt": "Paint the described subject as a high-end digital painting in a thick-paint (impasto) style. Use visible confident brush strokes, rich layered color blending, strong volumetric lighting with warm and cool contrast, painterly edges, detailed rendering on the face and focal areas, and loose expressive strokes in the background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "扁平插画",
+      "icon": "🟦",
+      "desc": "扁平矢量插画",
+      "size": "1024x1024",
+      "aliases": [
+        "flat",
+        "vector"
+      ],
+      "tags": [
+        "矢量",
+        "简约",
+        "商务"
+      ],
+      "prompt": "Illustrate the described subject as a modern flat vector illustration. Use clean geometric shapes, no outlines or very thin ones, a limited harmonious palette of 5 to 6 colors, subtle grain texture, simple gradient shadows, playful proportions, and a tidy balanced composition suitable for an editorial or app illustration. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "仙侠",
+      "icon": "🗡️",
+      "desc": "东方仙侠奇幻",
+      "size": "1024x1536",
+      "aliases": [
+        "xianxia",
+        "修仙"
+      ],
+      "tags": [
+        "中国风",
+        "奇幻",
+        "古风"
+      ],
+      "prompt": "Reimagine the described subject as a character in an epic Chinese xianxia fantasy world. Dress them in flowing layered hanfu-inspired robes with silk sashes, add a floating sword or magical artifact, glowing spiritual energy, misty mountain peaks, floating islands, and distant pavilions among clouds, rendered as a refined, luminous digital painting. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "敦煌",
+      "icon": "🪷",
+      "desc": "敦煌壁画飞天风",
+      "size": "1024x1536",
+      "aliases": [
+        "dunhuang",
+        "飞天"
+      ],
+      "tags": [
+        "中国风",
+        "壁画",
+        "传统"
+      ],
+      "prompt": "Render the described subject in the style of an ancient Dunhuang cave mural. Use mineral pigment colors such as malachite green, lapis blue, cinnabar red, and ochre, flowing ribbon-like scarves and apsara flying poses, ornate halos and lotus motifs, gently weathered plaster texture with subtle cracks, and an elegant flat decorative composition. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "青花瓷",
+      "icon": "🏺",
+      "desc": "青花瓷纹样艺术",
+      "size": "1024x1024",
+      "aliases": [
+        "porcelain",
+        "blueandwhite"
+      ],
+      "tags": [
+        "中国风",
+        "瓷器",
+        "传统"
+      ],
+      "prompt": "Transform the described subject into a design painted in traditional Chinese blue-and-white porcelain style. Use cobalt blue brushwork of varying intensity on glossy white glaze, decorative scrolling floral and cloud borders, fine linework, and present it as artwork painted on a smooth porcelain surface with soft studio reflections. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "皮影",
+      "icon": "🏮",
+      "desc": "中国传统皮影戏",
+      "size": "1536x1024",
+      "aliases": [
+        "shadowpuppet"
+      ],
+      "tags": [
+        "中国风",
+        "传统",
+        "戏曲"
+      ],
+      "prompt": "Depict the described subject as a traditional Chinese shadow puppet performance. Use intricately carved translucent leather puppets with jointed limbs and ornate cutout patterns, dyed in red, green, and amber, backlit against a glowing warm paper screen, with gentle light bleed and a theatrical folk-art mood. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "年画",
+      "icon": "🧧",
+      "desc": "喜庆中国年画",
+      "size": "1024x1536",
+      "aliases": [
+        "nianhua",
+        "新年"
+      ],
+      "tags": [
+        "中国风",
+        "喜庆",
+        "春节"
+      ],
+      "prompt": "Create a festive traditional Chinese New Year woodblock print (nianhua) featuring the described subject. Use bold black outlines, bright saturated red, green, yellow, and pink, chubby cheerful figures, auspicious symbols such as fish, peonies, lanterns, and gold ingots, a symmetrical celebratory composition, and visible paper and printing texture. No characters or calligraphy. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "汉服写真",
+      "icon": "👘",
+      "desc": "古风汉服人像摄影",
+      "size": "1024x1536",
+      "aliases": [
+        "hanfu"
+      ],
+      "tags": [
+        "古风",
+        "摄影",
+        "人像",
+        "写实"
+      ],
+      "prompt": "Photograph the described subject as an elegant classical Chinese hanfu portrait. Dress them in finely embroidered layered hanfu with a matching hairpiece, pose them gracefully in a traditional garden with moon gates, plum blossoms, or a bamboo grove, use soft diffused light, shallow depth of field, gentle film color grading, and photorealistic detail. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "毛毡",
+      "icon": "🧶",
+      "desc": "羊毛毡手作玩偶",
+      "size": "1024x1024",
+      "aliases": [
+        "felt",
+        "needlefelt"
+      ],
+      "tags": [
+        "手作",
+        "可爱",
+        "玩偶"
+      ],
+      "prompt": "Recreate the described subject as a handmade needle-felted wool figure. Use fuzzy visible wool fibers, soft rounded chunky forms, simple bead eyes, tiny stitched details, and photograph it as a cozy macro product shot on a wooden table with warm natural light and a softly blurred background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "折纸",
+      "icon": "🦢",
+      "desc": "纸艺折纸造型",
+      "size": "1024x1024",
+      "aliases": [
+        "origami",
+        "papercraft"
+      ],
+      "tags": [
+        "纸艺",
+        "手工",
+        "几何"
+      ],
+      "prompt": "Recreate the described subject as an intricate origami and papercraft sculpture. Use crisp folded paper facets, visible creases, layered colored paper with subtle fiber texture, clever geometric construction, and present it in a clean studio product shot with soft directional light and gentle shadows. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "积木",
+      "icon": "🧱",
+      "desc": "积木拼搭模型",
+      "size": "1024x1024",
+      "aliases": [
+        "bricks",
+        "building-blocks"
+      ],
+      "tags": [
+        "玩具",
+        "模型",
+        "3D"
+      ],
+      "prompt": "Rebuild the described subject as a detailed toy model made from plastic interlocking building bricks and a simple minifigure-style character if appropriate. Show visible studs, glossy ABS plastic, bright primary colors, slightly chunky stepped curves, and a crisp tabletop product photo with shallow depth of field. No brand markings. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "3D动画",
+      "icon": "🎬",
+      "desc": "3D 动画电影角色",
+      "size": "1024x1024",
+      "aliases": [
+        "3dcartoon",
+        "cgi"
+      ],
+      "tags": [
+        "3D",
+        "卡通",
+        "可爱"
+      ],
+      "prompt": "Render the described subject as a charming character from a high-budget 3D animated family film. Use appealing stylized proportions, large expressive eyes, soft subsurface-scattered skin, detailed hair and fabric, cinematic three-point lighting, a softly blurred colorful environment, and polished CGI render quality. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "低多边形",
+      "icon": "🔺",
+      "desc": "低多边形几何风",
+      "size": "1024x1024",
+      "aliases": [
+        "lowpoly"
+      ],
+      "tags": [
+        "3D",
+        "几何",
+        "简约"
+      ],
+      "prompt": "Render the described subject as a stylized low-poly 3D artwork. Use clearly visible flat-shaded triangular facets, a curated pastel or jewel-tone palette, soft ambient occlusion, gentle gradient lighting, and a minimal floating diorama or plain gradient background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "体素",
+      "icon": "🧊",
+      "desc": "体素方块世界",
+      "size": "1024x1024",
+      "aliases": [
+        "voxel"
+      ],
+      "tags": [
+        "3D",
+        "方块",
+        "游戏"
+      ],
+      "prompt": "Rebuild the described subject and a small surrounding scene out of tiny voxel cubes. Use a charming isometric view, crisp cube edges, bright saturated colors, soft global illumination, gentle shadows, and a floating island diorama on a clean background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "霓虹灯牌",
+      "icon": "💡",
+      "desc": "霓虹灯管招牌",
+      "size": "1024x1024",
+      "aliases": [
+        "neonsign"
+      ],
+      "tags": [
+        "霓虹",
+        "夜景",
+        "灯光"
+      ],
+      "prompt": "Recreate the described subject as a glowing neon tube sign mounted on a dark brick wall. Use continuous bent glass tube outlines in vivid pink, cyan, and warm yellow, realistic glow, bloom, and soft light spill on the wall, visible mounting brackets, and a moody night atmosphere. Do not add any letters. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "波普",
+      "icon": "🟡",
+      "desc": "波普艺术网点风",
+      "size": "1024x1024",
+      "aliases": [
+        "popart"
+      ],
+      "tags": [
+        "复古",
+        "艺术",
+        "撞色"
+      ],
+      "prompt": "Render the described subject as bold 1960s pop art. Use thick black outlines, flat high-contrast primary colors, Ben-Day halftone dot shading, a punchy split or repeated-panel composition, and graphic screen-print texture. No speech bubbles or lettering. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "新艺术",
+      "icon": "🌺",
+      "desc": "新艺术运动装饰海报",
+      "size": "1024x1536",
+      "aliases": [
+        "artnouveau"
+      ],
+      "tags": [
+        "复古",
+        "装饰",
+        "优雅"
+      ],
+      "prompt": "Depict the described subject as an elegant Art Nouveau decorative poster. Use flowing organic linework, a circular halo or ornamental frame behind the figure, stylized flowers and vines, muted gold, sage, and dusty rose tones, flowing hair or fabric, and a vintage lithograph print texture. Leave decorative panels blank instead of adding lettering. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "哥特",
+      "icon": "🦇",
+      "desc": "暗黑哥特奇幻",
+      "size": "1024x1536",
+      "aliases": [
+        "gothic",
+        "darkfantasy"
+      ],
+      "tags": [
+        "暗黑",
+        "奇幻",
+        "神秘"
+      ],
+      "prompt": "Reimagine the described subject in a dark gothic fantasy setting. Use an ornate cathedral or moonlit castle, candlelight and cold blue moonlight, black lace, velvet, and silver details, drifting fog, ravens or roses, rich deep shadows with dramatic chiaroscuro, and an elegant, mysterious atmosphere. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "蒸汽朋克",
+      "icon": "⚙️",
+      "desc": "维多利亚蒸汽朋克",
+      "size": "1024x1536",
+      "aliases": [
+        "steampunk"
+      ],
+      "tags": [
+        "机械",
+        "复古",
+        "奇幻"
+      ],
+      "prompt": "Reimagine the described subject in a Victorian steampunk world. Add brass gears, copper pipes, leather straps, goggles, clockwork mechanisms, and steam vents, set them among airships and smoky industrial city rooftops, and use warm amber lighting with rich metallic detail. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "废土",
+      "icon": "☢️",
+      "desc": "末日废土风",
+      "size": "1536x1024",
+      "aliases": [
+        "wasteland",
+        "postapocalyptic"
+      ],
+      "tags": [
+        "末日",
+        "科幻",
+        "荒凉"
+      ],
+      "prompt": "Place the described subject in a post-apocalyptic wasteland. Use weathered patched gear, scavenged makeshift equipment, a ruined overgrown city skyline, rusted vehicles, drifting dust, a hazy orange sky, and gritty cinematic color grading with a survival mood. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "星际",
+      "icon": "🚀",
+      "desc": "太空科幻史诗",
+      "size": "1536x1024",
+      "aliases": [
+        "space",
+        "scifi"
+      ],
+      "tags": [
+        "科幻",
+        "太空",
+        "宇宙"
+      ],
+      "prompt": "Set the described subject in an epic space science-fiction scene. Use a sleek spacesuit or starship interior, a huge ringed planet and colorful nebula through a viewport or beyond, glowing holographic interfaces, realistic hard-surface detail, and grand cinematic lighting. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "机甲",
+      "icon": "🤖",
+      "desc": "巨型机甲设计",
+      "size": "1024x1536",
+      "aliases": [
+        "mecha",
+        "robot"
+      ],
+      "tags": [
+        "机器人",
+        "科幻",
+        "机械"
+      ],
+      "prompt": "Reimagine the described subject as a giant humanoid mecha or as its pilot standing beside one, carrying over the subject's colors and motifs into the armor design. Use detailed panel lines, mechanical joints, thrusters, decals without text, a dramatic low camera angle, sparks and dust, and polished anime-style mecha rendering. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "胶片",
+      "icon": "🎞️",
+      "desc": "复古胶片摄影",
+      "size": "1024x1536",
+      "aliases": [
+        "film",
+        "analog"
+      ],
+      "tags": [
+        "摄影",
+        "复古",
+        "写实"
+      ],
+      "prompt": "Photograph the described subject on 35mm color film. Use natural candid composition, warm slightly faded colors, gentle halation around highlights, visible film grain, a soft vignette, and imperfect authentic analog character. Photorealistic. No date stamp. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "拍立得",
+      "icon": "📸",
+      "desc": "拍立得相片",
+      "size": "1024x1024",
+      "aliases": [
+        "polaroid",
+        "instant"
+      ],
+      "tags": [
+        "摄影",
+        "复古",
+        "可爱"
+      ],
+      "prompt": "Present the described subject as an instant photo print with a classic white border, lying on a wooden table or pinned to a corkboard. The photo inside has soft flash lighting, slightly washed-out colors, gentle vignetting, and a candid happy moment. Photorealistic. No handwriting. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "黑白",
+      "icon": "🖤",
+      "desc": "黑白艺术摄影",
+      "size": "1024x1536",
+      "aliases": [
+        "monochrome",
+        "bw"
+      ],
+      "tags": [
+        "摄影",
+        "黑白",
+        "质感"
+      ],
+      "prompt": "Photograph the described subject as a striking black-and-white fine-art portrait. Use deep blacks, luminous highlights, rich mid-tone gradation, dramatic directional light with sculpted shadows, fine grain, and a minimal composition with strong emotion. Monochrome only. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "证件照",
+      "icon": "🪪",
+      "desc": "标准证件照",
+      "size": "1024x1536",
+      "aliases": [
+        "idphoto"
+      ],
+      "tags": [
+        "写实",
+        "人像",
+        "证件"
+      ],
+      "prompt": "Create a clean formal ID-style photo of the described subject. Front-facing head and shoulders, centered, neutral friendly expression, neat hair and tidy collared clothing, even soft studio lighting with no harsh shadows, and a plain solid light blue background. Photorealistic. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "杂志封面",
+      "icon": "📰",
+      "desc": "时尚杂志封面大片",
+      "size": "1024x1536",
+      "aliases": [
+        "magazine",
+        "vogue"
+      ],
+      "tags": [
+        "时尚",
+        "摄影",
+        "人像"
+      ],
+      "prompt": "Shoot the described subject as a high-fashion magazine cover photo. Use a striking pose, couture styling, flawless editorial lighting, a bold solid or studio backdrop, crisp detail, and clean empty space at the top for a masthead. Do not add any masthead, words, or barcodes. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "美食",
+      "icon": "🍜",
+      "desc": "诱人美食摄影",
+      "size": "1024x1024",
+      "aliases": [
+        "food"
+      ],
+      "tags": [
+        "摄影",
+        "美食",
+        "写实"
+      ],
+      "prompt": "Shoot the described subject as an appetizing professional food photograph. Use beautiful plating, glistening textures, rising steam if appropriate, natural window side light, a styled table with linen and props, shallow depth of field, and warm inviting colors. Photorealistic. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "拟人",
+      "icon": "🐾",
+      "desc": "动物或物品拟人化",
+      "size": "1024x1536",
+      "aliases": [
+        "humanize",
+        "personify"
+      ],
+      "tags": [
+        "二次元",
+        "角色",
+        "萌化"
+      ],
+      "prompt": "Reimagine the described animal, object, or concept as an anime-style human character. Translate its colors, shapes, textures, and personality into hairstyle, outfit, accessories, and pose, keep small playful nods to the original form, and render a full-body character illustration with clean lineart and vivid cel shading on a simple background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "兽耳",
+      "icon": "🐱",
+      "desc": "兽耳萌系角色",
+      "size": "1024x1536",
+      "aliases": [
+        "kemonomimi",
+        "nekomimi"
+      ],
+      "tags": [
+        "二次元",
+        "可爱",
+        "角色"
+      ],
+      "prompt": "Draw the described subject as a cute anime character with fluffy animal ears and a matching tail that suit their personality, such as cat, fox, or rabbit. Keep the recognizable hair color, eyes, and outfit, add an expressive playful pose, sparkling eyes, clean lineart, soft cel shading, and a light pastel background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "线稿",
+      "icon": "🖊️",
+      "desc": "黑白线稿可涂色",
+      "size": "1024x1536",
+      "aliases": [
+        "lineart",
+        "coloring"
+      ],
+      "tags": [
+        "黑白",
+        "线稿",
+        "涂色"
+      ],
+      "prompt": "Draw the described subject as clean black-and-white line art suitable for a coloring page. Use crisp uniform outlines, clearly closed shapes, no shading, no gray tones, no fills, and a pure white background. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "刺绣",
+      "icon": "🪡",
+      "desc": "精致刺绣工艺",
+      "size": "1024x1024",
+      "aliases": [
+        "embroidery"
+      ],
+      "tags": [
+        "手工",
+        "传统",
+        "质感"
+      ],
+      "prompt": "Recreate the described subject as a detailed hand embroidery piece stitched on linen fabric in a wooden hoop. Use satin stitch, French knots, and long-and-short shading with glossy silk threads, visible fabric weave, and a flat-lay photo with soft natural light. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "马赛克",
+      "icon": "🧩",
+      "desc": "古典马赛克镶嵌画",
+      "size": "1024x1024",
+      "aliases": [
+        "mosaic"
+      ],
+      "tags": [
+        "艺术",
+        "古典",
+        "装饰"
+      ],
+      "prompt": "Render the described subject as an ancient-style mosaic made of small irregular stone and glass tesserae. Use visible grout lines, slightly uneven tile surfaces with subtle reflections, a rich earthy and gold-accented palette, and a decorative border pattern. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "黑板画",
+      "icon": "🖍️",
+      "desc": "粉笔黑板画",
+      "size": "1536x1024",
+      "aliases": [
+        "chalk",
+        "chalkboard"
+      ],
+      "tags": [
+        "手绘",
+        "校园",
+        "可爱"
+      ],
+      "prompt": "Draw the described subject as colorful chalk art on a dark green school chalkboard. Use soft powdery chalk strokes, smudged blending, simple cheerful doodle decorations, a wooden frame edge, and faint eraser marks. No writing. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "涂鸦",
+      "icon": "🎤",
+      "desc": "街头涂鸦墙绘",
+      "size": "1536x1024",
+      "aliases": [
+        "graffiti",
+        "streetart"
+      ],
+      "tags": [
+        "街头",
+        "潮流",
+        "喷漆"
+      ],
+      "prompt": "Paint the described subject as a vibrant street-art mural on a city wall. Use spray-paint gradients, drips and overspray, bold outlines, wildstyle shapes as abstract decoration, bright saturated colors, and a photo of the whole wall with pavement in the foreground. No readable tags or words. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "四格",
+      "icon": "🗒️",
+      "desc": "日式四格漫画",
+      "size": "1024x1536",
+      "aliases": [
+        "yonkoma",
+        "4koma"
+      ],
+      "tags": [
+        "漫画",
+        "搞笑",
+        "日常"
+      ],
+      "prompt": "Create a vertical four-panel Japanese yonkoma comic strip starring the described subject, telling a short cute everyday gag with a setup, development, twist, and punchline told purely through expressions and poses. Use clean manga lineart, screentone shading, consistent character design across all panels, and empty speech balloons without any text. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "卡牌",
+      "icon": "🃏",
+      "desc": "集换式卡牌卡面",
+      "size": "1024x1536",
+      "aliases": [
+        "tcg",
+        "cardgame"
+      ],
+      "tags": [
+        "卡牌",
+        "游戏",
+        "奇幻"
+      ],
+      "prompt": "Design the illustration for a premium fantasy trading card featuring the described subject. Use a dynamic action pose, glowing magical effects, a detailed fantasy background, a holographic foil-like sheen, and an ornate card frame with empty text boxes and no letters, numbers, or icons. No watermark, logo, signature, or text. Subject: {subject}"
+    },
+    {
+      "name": "贺卡",
+      "icon": "💌",
+      "desc": "节日贺卡插画",
+      "size": "1536x1024",
+      "aliases": [
+        "greetingcard",
+        "festival"
+      ],
+      "tags": [
+        "节日",
+        "温馨",
+        "祝福"
+      ],
+      "prompt": "Design a warm festive greeting card illustration featuring the described subject. Use a cozy seasonal setting with soft glowing lights, gentle snow, blossoms, or lanterns depending on the season implied by the subject, a delicate decorative border, soft watercolor and gouache textures, and a heartwarming mood. Leave space for a message but add no words. No watermark, logo, signature, or text. Subject: {subject}"
     }
   ]
 }

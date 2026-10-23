@@ -20,7 +20,7 @@ DEFAULT_MARKET_URLS = [
 ]
 MARKET_MAX_BYTES = 1024 * 1024
 MARKET_CACHE_SECONDS = 600
-MARKET_PAGE_SIZE = 20
+MARKET_PAGE_SIZE = 15
 PRESET_NAME_RE = re.compile(r"^[^\s\-/\\][^\s/\\]{0,11}$")
 PRESET_SIZE_RE = re.compile(r"^\d{3,4}x\d{3,4}$")
 

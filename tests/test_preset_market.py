@@ -62,7 +62,7 @@ class MarketIndexTests(unittest.TestCase):
                 self.assertNotIn(alias.lower(), taken)
             self.assertNotIn(item["name"], names)
             names.add(item["name"])
-        self.assertGreaterEqual(len(names), 10)
+        self.assertGreaterEqual(len(names), 50)
 
     def test_clean_preset_rejects_bad_entries(self):
         obj, _, _ = market_plugin()
@@ -99,6 +99,17 @@ class MarketCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("赛璐璐", " ".join(r["name"] for r in rows))
         await run(obj.preset_search(AdminEvent("/预设搜索")))
         self.assertEqual(len(calls), 1)
+
+    async def test_search_pages_keep_global_numbers(self):
+        obj, rendered, _ = market_plugin()
+        await run(obj.preset_search(AdminEvent("/预设搜索 2")))
+        rows = rendered["data"]["sections"][0]["rows"]
+        first = market.MARKET_PAGE_SIZE + 1
+        self.assertTrue(rows[0]["name"].startswith(f"{first}. "))
+        self.assertIn("第 2/", " ".join(rendered["data"]["tips"]))
+        name = rows[0]["name"].split()[-1]
+        out = plain(await run(obj.preset_import(AdminEvent(f"/预设导入 {first}"))))
+        self.assertIn(f"已导入：--{name}", out)
 
     async def test_search_no_match_and_offline(self):
         obj, _, _ = market_plugin()

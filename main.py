@@ -1774,7 +1774,10 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
             yield await self._text_result(event, "只有管理员能搜索和导入预设。")
             return
         raw = self._strip_command(event.message_str, {"预设搜索", "搜索预设", "presetsearch"})
-        keyword = raw.strip()
+        words = raw.split()
+        # 末尾的纯数字是页码：/预设搜索 2、/预设搜索 动漫 2
+        page = int(words.pop()) if words and words[-1].isdigit() else 1
+        keyword = " ".join(words)
         try:
             items = await self._market_index(force=keyword in ("刷新", "refresh"))
         except ComfyUIError as e:
@@ -1786,16 +1789,23 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         if not found:
             yield await self._text_result(event, f"预设市场里没有找到「{keyword}」相关的预设，换个关键词试试，或不带关键词查看全部。")
             return
-        shown = found[:MARKET_PAGE_SIZE]
+        pages = (len(found) + MARKET_PAGE_SIZE - 1) // MARKET_PAGE_SIZE
+        page = min(max(page, 1), pages)
+        start = (page - 1) * MARKET_PAGE_SIZE
+        shown = found[start:start + MARKET_PAGE_SIZE]
         if not hasattr(self, "_market_last"):
             self._market_last = {}
-        self._market_last[self._user_id(event)] = [item["name"] for item in shown]
+        # 编号跨页连续，导入时按整份搜索结果取
+        self._market_last[self._user_id(event)] = [item["name"] for item in found]
         rows, lines = [], []
-        for i, item in enumerate(shown, 1):
+        for i, item in enumerate(shown, start + 1):
             status = self._market_status(item)
             rows.append({"name": f"{i}. {item['icon']} {item['name']}", "desc": f"{item['desc']}（{item['size']}）", "tag": status})
             lines.append(f"{i}. {item['name']} — {item['desc']}（{item['size']}）" + (f"［{status}］" if status else ""))
-        more = f"共 {len(found)} 个，只显示前 {MARKET_PAGE_SIZE} 个，可以加关键词缩小范围" if len(found) > len(shown) else f"共 {len(found)} 个"
+        more = f"共 {len(found)} 个"
+        if pages > 1:
+            next_cmd = f"/预设搜索 {keyword + ' ' if keyword else ''}{page % pages + 1}"
+            more += f"，第 {page}/{pages} 页；{'下一页' if page < pages else '回到第一页'}：{next_cmd}"
         tips = ["导入：/预设导入 编号（可多个，空格隔开）或 /预设导入 名字", "删除：/预设删除 名字", more]
         title = f"「{keyword}」的搜索结果" if keyword else "全部预设"
         yield await self._info_card_result(event, {
