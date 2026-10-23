@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.15.0-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.15.1-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -27,7 +27,7 @@
 | --- | --- |
 | 🎨 **本地 ComfyUI 出图** | 把自己的工作流导出成 API 格式丢进文件夹，`/绘图 提示词` 就能用；支持多工作流切换、参数注入、LoRA 叠加、图生视频。 |
 | ☁️ **云绘图** | `/云绘图` 接 GPT-Image 或 Sub2API Antigravity/Gemini；引用或附带原图时自动改成图片编辑。 |
-| 🧸 **一键预设** | `--手办`、`--黏土`、`--像素`、`--贴纸`、`--水彩`… 十几种风格预设，`/变手办` 直接把原图变成收藏级手办。 |
+| 🧸 **一键预设** | `--巫女`、`--符卡`、`--手办`、`--黏土`、`--像素`… 二十多种风格预设（含 4 个博丽神社限定），`/变手办` 直接把原图变成收藏级手办。 |
 | 🎀 **博丽灵梦风卡片** | 帮助、工作流列表、ComfyUI 状态、云绘图方案，连报错和提示都用红白巫女风格的图片卡片回复，渲染失败自动退回文字。 |
 | 🌸 **二次元的我** | 每人每天抽一张自己的二次元形象，附资料卡。 |
 
@@ -45,6 +45,11 @@
     <td align="center"><img src="assets/showcase/pixel.jpg" width="240"><br><code>--像素</code><br>复古像素画</td>
     <td align="center"><img src="assets/showcase/sticker.png" width="240"><br><code>--贴纸</code><br>模切贴纸</td>
     <td align="center"><img src="assets/showcase/watercolor.jpg" width="240"><br><code>--水彩</code><br>水彩插画</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="assets/showcase/miko.jpg" width="240"><br><code>--巫女</code><br>红白巫女装束</td>
+    <td align="center"><img src="assets/showcase/shrine.jpg" width="240"><br><code>--参拜</code><br>博丽神社参拜</td>
+    <td align="center"><img src="assets/showcase/spellcard.jpg" width="240"><br><code>--符卡</code><br>弹幕符卡宣言</td>
   </tr>
 </table>
 
@@ -303,6 +308,10 @@ AstrBot/
 
 | 快捷参数 | 效果 | 推荐尺寸 |
 | --- | --- | --- |
+| `--巫女` / `--灵梦` | ⛩️ 博丽神社限定：红白巫女装束，博丽神社风 | 1024x1536 |
+| `--参拜` / `--神社` | ⛩️ 博丽神社限定：博丽神社参拜的横版风景 | 1536x1024 |
+| `--御守` / `--绘马` | ⛩️ 博丽神社限定：神社御守与绘马周边 | 1024x1024 |
+| `--符卡` / `--弹幕` | ⛩️ 博丽神社限定：弹幕符卡宣言的华丽战斗场面 | 1536x1024 |
 | `--手办` / `--变手办` | 收藏级 PVC 手办产品照 | 1024x1024 |
 | `--黏土` | Q 版手工黏土人 | 1024x1024 |
 | `--毛绒` | 柔软毛绒玩偶 | 1024x1024 |

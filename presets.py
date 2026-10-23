@@ -41,6 +41,63 @@ CLOUD_SIZE_PRESETS = {
     "--wide": "1536x1024",
 }
 CLOUD_PROMPT_PRESETS = {
+    # 博丽灵梦主题预设：排在最前，/云绘图预设 卡片上单独标出。
+    "巫女": {
+        "size": "1024x1536",
+        "desc": "红白巫女装束，博丽神社风",
+        "prompt": (
+            "Reimagine the described subject as a shrine maiden in the spirit of Hakurei Reimu's "
+            "red-and-white style. Preserve the subject's recognizable face, hair color, hairstyle, "
+            "body type, and personality; dress them in a red sleeveless shrine-maiden top with "
+            "white frilled detached sleeves, a large red hair bow with white frills, red hair "
+            "tubes, a yellow ascot, and a red skirt. They hold a gohei purification wand and a few "
+            "paper ofuda talismans. Set them on the stone steps of a quiet mountain Shinto shrine "
+            "with a red torii gate, shimenawa rope, drifting cherry petals, and soft afternoon "
+            "light. Polished Japanese anime illustration, clean lineart, vivid but harmonious red "
+            "and white palette. No watermark, logo, signature, or text. Subject: {subject}"
+        ),
+    },
+    "参拜": {
+        "size": "1536x1024",
+        "desc": "博丽神社参拜的横版风景",
+        "prompt": (
+            "Create a warm widescreen anime illustration of the described subject visiting a "
+            "secluded mountain shrine inspired by the Hakurei Shrine. Preserve the subject's "
+            "identity, outfit, and colors. Include a weathered red torii gate, a wooden offertory "
+            "donation box, a paper-lantern-lit shrine hall, shimenawa rope with shide paper, stone "
+            "lanterns, cherry blossom trees, and distant misty mountains. A red-and-white shrine "
+            "maiden sweeping leaves or sipping tea on the veranda may appear in the background. "
+            "Gentle golden-hour light, layered depth, peaceful nostalgic mood, detailed painterly "
+            "backgrounds. No watermark, logo, signature, or readable text. Subject: {subject}"
+        ),
+    },
+    "御守": {
+        "size": "1024x1024",
+        "desc": "神社御守与绘马周边",
+        "prompt": (
+            "Design a premium set of Japanese shrine charms themed on the described subject: a "
+            "brocade omamori charm pouch with a tied cord, a wooden ema votive plaque with a cute "
+            "chibi illustration of the subject, and a folded paper ofuda talisman. Use a red, "
+            "white, and gold Shinto shrine palette with yin-yang orb, red bow, and cherry blossom "
+            "motifs, fine embroidery and woodgrain textures, arranged on a tatami or red shrine "
+            "cloth, soft studio product photography. Keep any lettering minimal and abstract; no "
+            "gibberish text, watermark, logo, or signature. Subject: {subject}"
+        ),
+    },
+    "符卡": {
+        "size": "1536x1024",
+        "desc": "弹幕符卡宣言的华丽战斗场面",
+        "prompt": (
+            "Create a dazzling bullet-hell spell card declaration scene starring the described "
+            "subject, in the style of a Touhou-inspired danmaku battle. Preserve the subject's "
+            "identity, outfit, and colors; show them floating mid-air in a confident casting pose "
+            "with a glowing spell card in hand, while radiant symmetrical patterns of colorful "
+            "orbs, rice-shaped bullets, amulets, and yin-yang orbs spiral outward. Add a large "
+            "translucent magic circle, a moonlit night sky over a shrine, motion trails, bloom "
+            "lighting, and vivid saturated colors. Polished anime key visual. No HUD, score, "
+            "watermark, logo, signature, or readable text. Subject: {subject}"
+        ),
+    },
     "手办": {
         "size": "1024x1024",
         "desc": "收藏级 PVC 手办产品照",
@@ -332,6 +389,10 @@ CLOUD_PROMPT_PRESETS = {
     },
 }
 CLOUD_PROMPT_PRESET_ALIASES = {
+    "灵梦": "巫女", "博丽": "巫女", "miko": "巫女", "reimu": "巫女",
+    "神社": "参拜", "博丽神社": "参拜", "shrine": "参拜",
+    "绘马": "御守", "omamori": "御守",
+    "弹幕": "符卡", "符卡宣言": "符卡", "spellcard": "符卡", "danmaku": "符卡",
     "变手办": "手办", "figure": "手办", "figurine": "手办",
     "粘土": "黏土", "clay": "黏土",
     "玩偶": "毛绒", "plush": "毛绒",
@@ -355,6 +416,10 @@ CLOUD_PROMPT_PRESET_ALIASES = {
     "cafeui": "联动菜单", "collabmenu": "联动菜单",
 }
 CLOUD_PROMPT_PRESET_FLAGS = {
+    "--巫女": "巫女", "--灵梦": "巫女", "--博丽": "巫女", "--miko": "巫女", "--reimu": "巫女",
+    "--参拜": "参拜", "--神社": "参拜", "--博丽神社": "参拜", "--shrine": "参拜",
+    "--御守": "御守", "--绘马": "御守", "--omamori": "御守",
+    "--符卡": "符卡", "--弹幕": "符卡", "--符卡宣言": "符卡", "--spellcard": "符卡", "--danmaku": "符卡",
     "--手办": "手办", "--变手办": "手办", "--figure": "手办",
     "--黏土": "黏土", "--粘土": "黏土", "--clay": "黏土",
     "--毛绒": "毛绒", "--玩偶": "毛绒", "--plush": "毛绒",
@@ -469,6 +534,7 @@ DAILY_ME_THEMES = [
 
 # /云绘图预设 卡片上每个预设的图标。
 CLOUD_PRESET_ICONS = {
+    "巫女": "⛩️", "参拜": "🌸", "御守": "🎐", "符卡": "☯️",
     "手办": "🏆", "黏土": "🧸", "毛绒": "🐰", "头像": "👤",
     "海报": "🎬", "壁纸": "🌌", "贴纸": "✨", "像素": "👾",
     "盲盒": "🎁", "水彩": "🖌️", "赛博": "🌃", "国风": "🏮",
@@ -476,4 +542,12 @@ CLOUD_PRESET_ICONS = {
     "手机UI": "📱", "网页UI": "🖥️", "后台UI": "📊",
     "数据大屏": "🌐", "电商UI": "🛍️", "游戏UI": "🎮",
     "周边目录": "🎀", "联动菜单": "🍰",
+}
+
+# 博丽灵梦主题预设：/云绘图预设 卡片上单独成组，并显示 assets/ 下的缩略图（由 tools/gen_art.py 生成，缺图时只显示图标）。
+REIMU_PRESET_THUMBS = {
+    "巫女": "preset_thumbs/miko.jpg",
+    "参拜": "preset_thumbs/shrine.jpg",
+    "御守": "preset_thumbs/omamori.jpg",
+    "符卡": "preset_thumbs/spellcard.jpg",
 }

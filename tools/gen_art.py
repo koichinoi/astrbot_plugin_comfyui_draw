@@ -78,6 +78,23 @@ def make_avatar(src, dst, size=320):
     print(f"  已生成卡片小头像 {os.path.relpath(dst, ROOT)}")
 
 
+def make_thumb(src, dst, size=240):
+    """把示例图缩成小方图，供 /云绘图预设 卡片内嵌（JPEG，减小 html_render 的数据量）。"""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("  未安装 Pillow，跳过生成预设缩略图")
+        return
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with Image.open(src) as img:
+        img = img.convert("RGB")
+        side = min(img.size)
+        left, top = (img.width - side) // 2, (img.height - side) // 2
+        img = img.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
+        img.save(dst, "JPEG", quality=85)
+    print(f"  已生成预设缩略图 {os.path.relpath(dst, ROOT)}")
+
+
 def main(names):
     base = os.environ.get("IMAGE_BASE_URL", "").strip()
     key = os.environ.get("IMAGE_API_KEY", "").strip()
@@ -103,6 +120,8 @@ def main(names):
         print(f"  已保存 {item['file']}（{os.path.getsize(out) // 1024} KB）")
         if item["name"] == "help":
             make_avatar(out, os.path.join(ROOT, "assets", "reimu_avatar.jpg"))
+        if item.get("thumb"):
+            make_thumb(out, os.path.join(ROOT, item["thumb"]))
     if failed:
         sys.exit("以下图片生成失败：" + "、".join(failed))
 

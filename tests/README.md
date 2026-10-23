@@ -13,6 +13,7 @@ python tests/test_cloud_default_style.py
 python tests/test_info_cards.py
 python tests/test_queue_and_history.py
 python tests/test_draw_switches.py
+python tests/test_reimu_presets.py
 ```
 
 测试使用 AstrBot/aiohttp 替身和虚构的 API Key，不连接真实出图服务，不消耗接口额度。
@@ -29,3 +30,4 @@ python tests/test_draw_switches.py
 - `test_cloud_default_style.py`：默认画风只追加到普通文生图，预设、`--style`、原图编辑与「二次元的我」不受影响，可改可关。
 
 测试会像 AstrBot 一样把插件目录作为包加载，因此 `main.py` 可以相对导入 `presets.py` 与 `templates.py`。
+- `test_reimu_presets.py`：博丽神社限定预设（巫女、参拜、御守、符卡）的参数与别名、`/云绘图预设` 灵梦风卡片分组与缺图兜底、文字兜底分组。
