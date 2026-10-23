@@ -1,5 +1,5 @@
 {
-  "model": "gpt-image-2",
+  "model": "gpt-image-2.5-sunburst",
   "subject": "Hakurei Reimu from Touhou Project: shrine maiden with long black hair, a large red hair bow with white frilled edges, red-and-white detached-sleeve miko outfit with a yellow ascot, red skirt, cheerful confident expression",
   "default_style": "日系二次元动漫插画，干净线稿，赛璐璐上色，不要真人照片或写实风格",
   "images": [
@@ -68,6 +68,38 @@
       "size": "1024x1536",
       "max_side": 900,
       "preset": "水彩"
+    },
+    {
+      "name": "miko",
+      "file": "assets/showcase/miko.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "thumb": "assets/preset_thumbs/miko.jpg",
+      "preset": "巫女"
+    },
+    {
+      "name": "shrine",
+      "file": "assets/showcase/shrine.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "thumb": "assets/preset_thumbs/shrine.jpg",
+      "preset": "参拜"
+    },
+    {
+      "name": "omamori",
+      "file": "assets/showcase/omamori.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "thumb": "assets/preset_thumbs/omamori.jpg",
+      "preset": "御守"
+    },
+    {
+      "name": "spellcard",
+      "file": "assets/showcase/spellcard.jpg",
+      "size": "1024x1024",
+      "max_side": 900,
+      "thumb": "assets/preset_thumbs/spellcard.jpg",
+      "preset": "符卡"
     }
   ]
 }

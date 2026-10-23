@@ -151,108 +151,188 @@ DRAW_HELP_TMPL = """
 </html>
 """
 
+# 博丽灵梦风格的 /云绘图预设 卡片。
+# 数据：reimu_items / items = [{name, icon, desc, size, thumb（可选 data URI）}], illust（可选 data URI）, scale
 CLOUD_PRESET_CARD_TMPL = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
 <style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 100%; background: transparent; }
-  body {
-    width: 100vw; min-width: 900px;
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-    color: #4e5878;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC",sans-serif;
+    background: #fbefee;
   }
+  .serif { font-family: "Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif; }
   .card {
-    width: 100%; padding: 34px 36px 28px; overflow: hidden;
-    zoom: {{ scale | default(2) }};
+    width: 760px; zoom: {{ scale | default(2) }}; position: relative; overflow: hidden; color: #4d3336;
     background:
-      radial-gradient(circle at 5% 4%, rgba(255,190,219,.48), transparent 27%),
-      radial-gradient(circle at 96% 5%, rgba(172,220,255,.58), transparent 29%),
-      radial-gradient(circle at 92% 96%, rgba(205,190,255,.42), transparent 30%),
-      linear-gradient(145deg, #fff9fc 0%, #f5f6ff 48%, #eff8ff 100%);
-    border: 2px solid rgba(193,195,235,.72);
+      radial-gradient(circle at 92% 60%, rgba(214,48,64,0.06), transparent 26%),
+      linear-gradient(180deg, #fffaf8 0%, #fdf3f1 60%, #fbecea 100%);
   }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-  .brand { display: flex; align-items: center; gap: 15px; }
-  .logo {
-    width: 58px; height: 58px; border-radius: 18px; display: flex;
-    align-items: center; justify-content: center; font-size: 32px;
-    background: linear-gradient(145deg, #7f8eea, #99b9f2);
-    box-shadow: 0 9px 24px rgba(104,121,199,.25);
+  .banner {
+    position: relative; min-height: 108px; padding: 22px 26px 24px 26px; color: #fffaf6;
+    background: linear-gradient(170deg, #df3646 0%, #c8283a 65%, #b11f31 100%);
+    display: flex; align-items: center; gap: 14px;
   }
-  .title { font-size: 31px; font-weight: 900; color: #6573bd; letter-spacing: .5px; }
-  .subtitle { margin-top: 4px; font-size: 15px; color: #8d96bd; }
-  .badge {
-    padding: 9px 15px; border-radius: 999px; font-size: 14px; font-weight: 800;
-    color: #7d70ac; background: rgba(255,255,255,.72);
-    border: 1px solid rgba(195,180,225,.68);
+  .banner.has-illust { padding-right: 160px; }
+  .orb { flex-shrink: 0; filter: drop-shadow(0 3px 4px rgba(90,10,20,0.35)); }
+  .title { font-size: 26px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 2px 0 rgba(100,10,20,0.35); }
+  .subtitle { font-size: 13px; color: #ffe1dc; margin-top: 5px; letter-spacing: 1px; }
+  .illust {
+    position: absolute; right: 14px; bottom: -36px; width: 140px; height: 140px; z-index: 3;
+    border-radius: 50%; object-fit: cover; border: 4px solid #ffffff;
+    box-shadow: 0 4px 12px rgba(120,20,30,0.25); background: #fffaf8;
   }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 15px; }
+  .frill {
+    position: relative; z-index: 2; height: 15px; margin-top: -1px;
+    background: radial-gradient(circle at 10px 0, #ffffff 0 9px, #e8aab0 9px 10.5px, transparent 11px) 0 0 / 20px 15px repeat-x;
+  }
+  .body { position: relative; z-index: 1; padding: 14px 22px 4px 22px; }
+  .body.has-illust { padding-top: 32px; }
+  .section-h {
+    display: flex; align-items: center; gap: 8px; margin: 4px 2px 10px 2px;
+    font-size: 16px; font-weight: 900; color: #b81f30; letter-spacing: 2px;
+  }
+  .section-h::after { content: ""; flex: 1; border-bottom: 1.5px dashed #ecc3c6; }
+  .shrine { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  .ofuda {
+    position: relative; display: flex; gap: 12px; align-items: center; padding: 10px 14px 10px 10px;
+    background: #fffdf6; border: 1.5px solid #d6303f; outline: 3px solid #fffdf6;
+    box-shadow: 0 5px 14px rgba(170,60,70,0.14); border-radius: 3px;
+  }
+  .ofuda::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #d6303f;
+  }
+  .thumb {
+    flex-shrink: 0; width: 76px; height: 76px; margin-left: 6px; border-radius: 4px; object-fit: cover;
+    border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(120,20,30,0.22); background: #fbecea;
+  }
+  .thumb.icon { display: flex; align-items: center; justify-content: center; font-size: 36px; }
+  .ofuda .info { flex: 1; min-width: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-bottom: 16px; }
   .preset {
-    min-height: 94px; padding: 16px 18px; border-radius: 19px;
-    background: rgba(255,255,255,.82); border: 1px solid rgba(208,211,237,.82);
-    box-shadow: 0 7px 22px rgba(94,105,158,.09);
+    position: relative; padding: 11px 14px 10px 18px; border-radius: 7px;
+    background: rgba(255,255,255,0.96); border: 1px solid #f2d2d3;
+    box-shadow: 0 3px 10px rgba(170,60,70,0.08);
   }
-  .preset-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .name { font-size: 20px; font-weight: 900; color: #6573bd; }
+  .preset::before {
+    content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
+    border-radius: 0 3px 3px 0; background: #e0707b;
+  }
+  .preset-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .name { font-size: 16.5px; font-weight: 900; color: #a91d2c; }
   .flag {
-    font-family: Consolas, Menlo, monospace; font-size: 13px; font-weight: 800;
-    color: #6d80bd; background: #edf2ff; padding: 5px 9px; border-radius: 9px;
+    flex-shrink: 0; font-family: Consolas, Menlo, monospace; font-size: 11.5px; font-weight: 800;
+    color: #c4202f; background: #fff1ef; padding: 3px 7px; border-radius: 3px;
   }
-  .desc { margin-top: 10px; font-size: 15.5px; font-weight: 700; color: #5f6884; }
-  .size { margin-top: 5px; font-size: 13px; color: #9a86b4; }
+  .desc { margin-top: 6px; font-size: 13px; font-weight: 700; color: #6e5155; }
+  .size { margin-top: 3px; font-size: 11.5px; color: #b98a8f; }
   .usage {
-    margin-top: 18px; padding: 20px 22px; border-radius: 21px;
-    background: rgba(255,255,255,.75); border: 1px solid rgba(208,198,234,.76);
+    position: relative; background: rgba(255,255,255,0.96); border-radius: 8px;
+    padding: 13px 18px 12px 22px; margin-bottom: 12px;
+    border: 1px solid #f2d2d3; box-shadow: 0 4px 14px rgba(170,60,70,0.10);
   }
-  .usage-title { font-size: 18px; font-weight: 900; color: #746bb1; margin-bottom: 11px; }
+  .usage::before {
+    content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 5px;
+    border-radius: 0 3px 3px 0; background: #d6303f;
+  }
+  .usage-h {
+    font-size: 15.5px; font-weight: 900; color: #b81f30; letter-spacing: 1px;
+    padding-bottom: 7px; margin-bottom: 4px; border-bottom: 1.5px dashed #f2cfd1;
+  }
   .example {
-    margin-top: 8px; padding: 10px 13px; border-radius: 12px; font-size: 14.5px;
-    font-family: Consolas, "Microsoft YaHei", monospace; color: #56648b;
-    background: #f1f4fc; border-left: 4px solid #92a2df;
+    margin-top: 7px; padding: 7px 12px; border-radius: 4px; font-size: 13.5px;
+    font-family: Consolas, "Microsoft YaHei", monospace; color: #6e3a40;
+    background: #fdf1ef; border-left: 3px solid #e0707b;
   }
-  .tip { margin-top: 12px; font-size: 14px; line-height: 1.75; color: #7d86a6; }
-  .footer { margin-top: 18px; text-align: center; font-size: 13.5px; color: #9aa3bf; }
+  .tip { margin-top: 9px; font-size: 12.5px; line-height: 1.7; color: #8a6a6e; }
+  .footer {
+    position: relative; z-index: 1; margin-top: 8px; padding: 10px 14px 12px 14px;
+    display: flex; justify-content: center; align-items: center; gap: 10px;
+    color: #fff3ee; font-size: 12.5px; letter-spacing: 2px; background: #c8283a;
+  }
+  .footer::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -12px; height: 12px;
+    background: radial-gradient(circle at 10px 12px, #c8283a 0 9px, transparent 10px) 0 0 / 20px 12px repeat-x;
+  }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="top">
-      <div class="brand">
-        <div class="logo">🎨</div>
-        <div>
-          <div class="title">云绘图快捷预设</div>
-          <div class="subtitle">一条参数，快速切换成品风格</div>
+<div class="card">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="yy" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="47" fill="#ffffff" stroke="#9e1b2a" stroke-width="4"/>
+        <path d="M50 3 A47 47 0 0 1 50 97 A23.5 23.5 0 0 1 50 50 A23.5 23.5 0 0 0 50 3 Z" fill="#d6303f"/>
+        <circle cx="50" cy="26.5" r="7" fill="#d6303f"/>
+        <circle cx="50" cy="73.5" r="7" fill="#ffffff"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="banner{% if illust %} has-illust{% endif %}">
+    <svg class="orb" width="52" height="52" aria-hidden="true"><use href="#yy"/></svg>
+    <div>
+      <div class="title serif">云绘图快捷预设</div>
+      <div class="subtitle">一条参数，换一身行头 · 文生图 / 图生图通用</div>
+    </div>
+    {% if illust %}<img class="illust" src="{{ illust }}"/>{% endif %}
+  </div>
+  <div class="frill"></div>
+
+  <div class="body{% if illust %} has-illust{% endif %}">
+    {% if reimu_items %}
+    <div class="section-h serif">⛩️ 博丽神社限定</div>
+    <div class="shrine">
+      {% for item in reimu_items %}
+      <div class="ofuda">
+        {% if item.thumb %}<img class="thumb" src="{{ item.thumb }}"/>{% else %}<div class="thumb icon">{{ item.icon }}</div>{% endif %}
+        <div class="info">
+          <div class="preset-top">
+            <span class="name serif">{{ item.name | e }}</span>
+            <span class="flag">--{{ item.name | e }}</span>
+          </div>
+          <div class="desc">{{ item.desc | e }}</div>
+          <div class="size">推荐尺寸 · {{ item.size | e }}</div>
         </div>
       </div>
-      <div class="badge">云端绘图 · 文生图 / 图生图</div>
+      {% endfor %}
     </div>
+    {% endif %}
+
+    <div class="section-h serif">🎨 通用画风</div>
     <div class="grid">
       {% for item in items %}
       <div class="preset">
         <div class="preset-top">
-          <span class="name">{{ item.icon }} {{ item.name }}</span>
-          <span class="flag">--{{ item.name }}</span>
+          <span class="name">{{ item.icon }} {{ item.name | e }}</span>
+          <span class="flag">--{{ item.name | e }}</span>
         </div>
-        <div class="desc">{{ item.desc }}</div>
-        <div class="size">推荐尺寸 · {{ item.size }}</div>
+        <div class="desc">{{ item.desc | e }}</div>
+        <div class="size">推荐尺寸 · {{ item.size | e }}</div>
       </div>
       {% endfor %}
     </div>
+
     <div class="usage">
-      <div class="usage-title">✨ 使用示例</div>
-      <div class="example">/云绘图 银发少女，蓝色连衣裙 --手办</div>
-      <div class="example">引用或附带原图 → /变手办</div>
-      <div class="example">回复原图 → /云绘图 --毛绒</div>
+      <div class="usage-h serif">使用示例</div>
+      <div class="example">/云绘图 银发少女，蓝色连衣裙 --巫女</div>
+      <div class="example">/云绘图 银发少女 --预设 手办</div>
+      <div class="example">引用或附带原图 → /变手办　　回复原图 → /云绘图 --符卡</div>
       <div class="tip">
         附带原图时会自动切换到云端图片编辑，尽量保留人物身份、脸部、服装、姿势与构图；
         默认沿用第一张原图分辨率，手动填写 --size 时以指定尺寸为准。
       </div>
     </div>
-    <div class="footer">Rabbit House · 云端绘图会消耗对应接口额度</div>
   </div>
+
+  <div class="footer serif">
+    <svg width="16" height="16" aria-hidden="true"><use href="#yy"/></svg>
+    <span>博丽神社 ｜ 云端绘图会消耗对应接口额度，赛钱箱也欢迎投币～</span>
+  </div>
+</div>
 </body>
 </html>
 """
@@ -264,83 +344,125 @@ DAILY_ME_CARD_TMPL = """
 <meta charset="utf-8"/>
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; width: 100%; background: transparent; }
+  html, body { margin: 0; padding: 0; width: 100%; background: #fbefee; }
   body {
     width: 100vw;
     min-width: 900px;
-    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-    color: #665c83;
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+    color: #4d3336;
   }
+  .serif { font-family: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", serif; }
   .card {
     width: 100%;
-    padding: 34px;
-    border-radius: 34px;
     overflow: hidden;
+    position: relative;
     background:
-      radial-gradient(circle at 8% 4%, rgba(255,191,218,.52), transparent 25%),
-      radial-gradient(circle at 94% 8%, rgba(178,222,255,.58), transparent 26%),
-      radial-gradient(circle at 90% 94%, rgba(204,189,255,.46), transparent 30%),
-      linear-gradient(145deg, #fff9fc 0%, #f8f4ff 48%, #f0f8ff 100%);
-    border: 2px solid rgba(208,183,235,.75);
-    box-shadow: 0 18px 55px rgba(100,83,140,.18);
+      radial-gradient(circle at 92% 70%, rgba(214,48,64,.07), transparent 26%),
+      linear-gradient(180deg, #fffaf8 0%, #fdf3f1 60%, #fbecea 100%);
   }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
-  .title { font-size: 34px; font-weight: 800; color: #806db0; letter-spacing: 1px; }
+  .banner {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 30px 36px 32px; color: #fffaf6;
+    background: linear-gradient(170deg, #df3646 0%, #c8283a 65%, #b11f31 100%);
+  }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .orb { flex-shrink: 0; filter: drop-shadow(0 3px 4px rgba(90,10,20,.35)); }
+  .title { font-size: 36px; font-weight: 900; letter-spacing: 3px; text-shadow: 0 2px 0 rgba(100,10,20,.35); }
+  .subtitle { margin-top: 6px; font-size: 16px; color: #ffe1dc; letter-spacing: 2px; }
   .date {
-    font-size: 16px; font-weight: 700; color: #9a89bd;
-    padding: 9px 15px; border-radius: 999px;
-    background: rgba(255,255,255,.72); border: 1px solid rgba(190,170,225,.5);
+    flex-shrink: 0; font-size: 17px; font-weight: 900; letter-spacing: 2px;
+    padding: 8px 16px; color: #c4202f; background: #fffaf0;
+    border: 2px solid #fffaf0; outline: 2px solid #d6303f; outline-offset: -6px;
+    transform: rotate(-3deg);
   }
+  .frill {
+    height: 20px; margin-top: -1px;
+    background: radial-gradient(circle at 13px 0, #ffffff 0 12px, #e8aab0 12px 14px, transparent 14.5px) 0 0 / 26px 20px repeat-x;
+  }
+  .main { padding: 18px 34px 8px; }
   .details {
     display: grid; grid-template-columns: 1fr 1fr; gap: 13px 16px;
     margin-bottom: 22px;
   }
   .item {
-    min-height: 76px; padding: 14px 17px; border-radius: 18px;
-    background: rgba(255,255,255,.76); border: 1px solid rgba(220,204,238,.72);
+    position: relative; min-height: 76px; padding: 14px 18px 14px 24px; border-radius: 9px;
+    background: rgba(255,255,255,.96); border: 1px solid #f2d2d3;
+    box-shadow: 0 4px 14px rgba(170,60,70,.10);
+  }
+  .item::before {
+    content: ""; position: absolute; left: 0; top: 13px; bottom: 13px; width: 6px;
+    border-radius: 0 3px 3px 0; background: #d6303f;
   }
   .item.wide { grid-column: 1 / -1; }
-  .label { font-size: 14px; font-weight: 800; color: #ac8fc7; margin-bottom: 6px; }
-  .value { font-size: 20px; line-height: 1.45; font-weight: 700; color: #625778; }
+  .label { font-size: 15px; font-weight: 900; color: #b81f30; letter-spacing: 2px; margin-bottom: 6px; }
+  .value { font-size: 20px; line-height: 1.45; font-weight: 700; color: #5d3c40; }
   .preview-wrap {
-    padding: 10px; border-radius: 26px;
-    background: rgba(255,255,255,.86);
-    border: 1px solid rgba(215,194,235,.8);
-    box-shadow: 0 10px 30px rgba(98,77,135,.12);
+    padding: 10px; border-radius: 6px;
+    background: #fffdf6;
+    border: 2px solid #d6303f; outline: 4px solid #fffdf6;
+    box-shadow: 0 10px 30px rgba(150,40,50,.16);
   }
   .preview {
     display: block; width: 100%; max-height: 620px; object-fit: contain;
-    border-radius: 19px; background: #f6f2fa;
+    border-radius: 3px; background: #fbecea;
   }
   .meta {
-    margin-top: 17px; padding: 13px 16px; border-radius: 15px;
-    text-align: center; font-size: 15px; font-weight: 700; color: #8c7ba8;
-    background: rgba(255,255,255,.62);
+    margin-top: 18px; padding: 12px 16px; border-radius: 4px; border-left: 4px solid #e0707b;
+    text-align: center; font-size: 15px; font-weight: 700; color: #8a6a6e;
+    background: rgba(255,255,255,.8);
   }
   .footer {
-    margin-top: 15px; text-align: center; font-size: 15px; color: #a392bb;
+    position: relative; margin-top: 26px; padding: 14px 20px 16px;
+    display: flex; justify-content: center; align-items: center; gap: 12px;
+    font-size: 16px; letter-spacing: 2px; color: #fff3ee; background: #c8283a;
+  }
+  .footer::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px;
+    background: radial-gradient(circle at 13px 14px, #c8283a 0 11px, transparent 12px) 0 0 / 26px 14px repeat-x;
   }
 </style>
 </head>
 <body>
   <div class="card">
-    <div class="top">
-      <div class="title">✨ 今日的二次元的你</div>
-      <div class="date">{{ date }}</div>
-    </div>
-    <div class="details">
-      {% for item in items %}
-      <div class="item{% if item.wide %} wide{% endif %}">
-        <div class="label">{{ item.label }}</div>
-        <div class="value">{{ item.value }}</div>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <symbol id="yy" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="47" fill="#ffffff" stroke="#9e1b2a" stroke-width="4"/>
+          <path d="M50 3 A47 47 0 0 1 50 97 A23.5 23.5 0 0 1 50 50 A23.5 23.5 0 0 0 50 3 Z" fill="#d6303f"/>
+          <circle cx="50" cy="26.5" r="7" fill="#d6303f"/>
+          <circle cx="50" cy="73.5" r="7" fill="#ffffff"/>
+        </symbol>
+      </defs>
+    </svg>
+    <div class="banner">
+      <div class="brand">
+        <svg class="orb" width="60" height="60" aria-hidden="true"><use href="#yy"/></svg>
+        <div>
+          <div class="title serif">今日的二次元的你</div>
+          <div class="subtitle">博丽神社 · 每日一签</div>
+        </div>
       </div>
-      {% endfor %}
+      <div class="date serif">{{ date }}</div>
     </div>
-    <div class="preview-wrap">
-      <img class="preview" src="{{ preview_data_uri }}"/>
+    <div class="frill"></div>
+    <div class="main">
+      <div class="details">
+        {% for item in items %}
+        <div class="item{% if item.wide %} wide{% endif %}">
+          <div class="label serif">{{ item.label }}</div>
+          <div class="value">{{ item.value }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="preview-wrap">
+        <img class="preview" src="{{ preview_data_uri }}"/>
+      </div>
+      <div class="meta">{{ meta }}</div>
     </div>
-    <div class="meta">{{ meta }}</div>
-    <div class="footer">{{ footer }}</div>
+    <div class="footer serif">
+      <svg width="18" height="18" aria-hidden="true"><use href="#yy"/></svg>
+      <span>{{ footer }}</span>
+    </div>
   </div>
 </body>
 </html>

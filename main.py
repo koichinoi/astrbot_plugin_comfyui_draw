@@ -1504,7 +1504,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                     {"cmd": "/绘图状态", "desc": "检查 ComfyUI 是否在线", "admin": False},
                     {"cmd": "/绘图队列 [取消 编号]", "desc": "查看谁在画、谁在排队；可取消自己的任务", "admin": False},
                     {"cmd": "/我的绘图", "desc": "查看自己最近的出图记录和今日剩余次数", "admin": False},
-                    {"cmd": "/云绘图预设", "desc": "查看手办、头像、海报等云绘图快捷预设", "admin": False},
+                    {"cmd": "/云绘图预设", "desc": "查看巫女、符卡、手办、海报等云绘图快捷预设", "admin": False},
                     {"cmd": "/云绘图切换 [方案] [模型]", "desc": "查看云绘图方案；切换方案或模型仅限管理员", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
@@ -1895,9 +1895,15 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
 
     def _cloud_preset_text(self):
         """云绘图预设的文字兜底内容。"""
-        lines = ["🎨 云绘图快捷预设"]
+        lines = ["⛩️ 云绘图快捷预设", "", "【博丽神社限定】"]
+        groups = {True: [], False: []}
         for name, item in self.CLOUD_PROMPT_PRESETS.items():
-            lines.append(f"--{name}　{item['desc']}（{item['size']}）")
+            groups[name in presets.REIMU_PRESET_THUMBS].append(
+                f"--{name}　{item['desc']}（{item['size']}）"
+            )
+        lines.extend(groups[True])
+        lines.extend(["", "【通用画风】"])
+        lines.extend(groups[False])
         lines.extend([
             "",
             "示例：/云绘图 银发少女，蓝色连衣裙 --手办",
@@ -1910,19 +1916,29 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
 
     async def _render_cloud_preset_card(self):
         """渲染云绘图预设图片卡片；失败返回 None。"""
-        items = [
-            {
+        reimu_items, items = [], []
+        for name, item in self.CLOUD_PROMPT_PRESETS.items():
+            entry = {
                 "name": name,
                 "icon": presets.CLOUD_PRESET_ICONS.get(name, "🎨"),
                 "desc": item["desc"],
                 "size": item["size"],
             }
-            for name, item in self.CLOUD_PROMPT_PRESETS.items()
-        ]
+            thumb = presets.REIMU_PRESET_THUMBS.get(name)
+            if thumb is None:
+                items.append(entry)
+            else:
+                entry["thumb"] = self._asset_data_uri(thumb)
+                reimu_items.append(entry)
         try:
             return await self.html_render(
                 CLOUD_PRESET_CARD_TMPL,
-                {"items": items, "scale": 2},
+                {
+                    "reimu_items": reimu_items,
+                    "items": items,
+                    "illust": self._asset_data_uri("reimu_avatar.jpg"),
+                    "scale": 2,
+                },
                 options={"full_page": True, "type": "jpeg", "quality": 95},
             )
         except Exception as e:  # noqa: BLE001
@@ -2463,7 +2479,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             "/绘图 <提示词> [参数]   出图（别名 draw / comfyui / comfy）\n"
             "/云绘图 <提示词> [参数]  云端出图；有原图时自动图片编辑（别名 gptdraw）\n"
             "/变手办                 引用/附带原图，一键转换成手办（别名 手办化）\n"
-            "/云绘图预设             查看手办、头像、海报等快捷预设\n"
+            "/云绘图预设             查看巫女、符卡、手办等快捷预设\n"
             "/云绘图切换 [方案] [模型]  查看 / 切换云绘图接口方案（切换仅管理员）\n"
             "/云绘图模型 [模型名]    查看 / 修改当前方案的模型（修改仅管理员）\n"
             "/绘图列表              查看可用工作流（别名 drawlist）\n"
