@@ -1,3 +1,9 @@
+# v1.15.0-optimized
+
+- 新增本地绘图与云绘图两个独立开关：`enable_local_draw`、`enable_cloud_draw`（默认都开）。关闭后对应指令、AI 绘图工具、`/重画` 和「二次元的我」都会提示已关闭，另一边开着时会提示改用哪个指令；对管理员同样生效。
+- 新增 `/绘图开关`（别名 `/drawswitch`）：所有可用绘图的人都能查看状态，管理员可用 `/绘图开关 本地|云端 开|关` 单独切换并写回配置。
+- 新增 `tests/test_draw_switches.py`。
+
 # v1.14.1-optimized
 
 - 拆分代码：云端接口移到 `cloud_backend.py`，本地 ComfyUI 与工作流注入移到 `comfy_backend.py`，排队、限流与出图记录移到 `usage.py`，错误类型移到 `errors.py`；`main.py` 只保留指令入口，从约 4200 行降到约 2500 行。行为与配置项不变。
