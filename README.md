@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.15.2-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.16.0-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -230,6 +230,9 @@ AstrBot/
 | `/云绘图` | 用云端 GPT-Image 接口出图（按量付费） | `/gptdraw`、`/gptimage`、`/clouddraw` |
 | `/变手办` | 引用或附带原图，一键用云端图片编辑转换成手办 | `/手办化`、`/figureme` |
 | `/云绘图预设` | 用图片卡片查看云绘图预设、尺寸与使用示例 | `/云预设`、`/gpt预设` |
+| `/预设搜索` | 管理员在预设市场按关键词搜索云绘图预设（不带关键词列出全部） | `/搜索预设`、`/presetsearch` |
+| `/预设导入` | 管理员按搜索结果编号或名字导入预设，可一次导入多个 | `/导入预设`、`/presetimport` |
+| `/预设删除` | 管理员删除导入的预设（内置预设不能删） | `/删除预设`、`/presetdelete` |
 | `/云绘图切换` | 查看云绘图方案；管理员可切换方案（可同时指定模型），全局生效 | `/云切换`、`/cloudswitch` |
 | `/云绘图模型` | 查看当前方案的模型；管理员可修改，全局生效 | `/云模型`、`/cloudmodel` |
 | `/绘图列表` | 查看可用工作流 | `/drawlist`、`/comfyui_list` |
@@ -346,6 +349,22 @@ AstrBot/
 ```
 
 `/变手办` 会自动加入“尽量保留人物身份、脸部特征、发型、服装配色、姿势、机位和构图”的要求。图生图默认沿用第一张原图的宽高，手办等预设不会再强制改成方图；如果显式使用 `--size`、`--横图`、`--竖图` 等参数，则以手动尺寸为准。GPT-Image 2 的自定义尺寸需要符合接口限制，因此不是 16 像素倍数或超出上限的原图会进行最小幅度调整。多图编辑最多读取 `openai_image_edit_max_inputs` 张，默认 4 张；重复图片自动忽略。是否能完全保持原脸仍取决于云端模型本身。
+
+### 预设市场（在线搜索导入预设）
+
+除了内置预设，管理员还可以从预设市场在线搜索、导入更多画风，目前有 56 个，比如 Q 版、立绘、三视图、表情包、兽耳、仙侠、敦煌、汉服写真、胶片、拍立得、3D动画、积木、浮世绘、厚涂、蒸汽朋克、机甲、塔罗牌：
+
+```text
+/预设搜索 复古        → 列出带编号的结果卡片（每页 15 个）
+/预设搜索 2           → 不带关键词时看全部预设的第 2 页
+/预设导入 1 3         → 按编号导入（也可以 /预设导入 浮世绘）
+/云绘图 富士山下的少女 --浮世绘
+/预设删除 浮世绘
+```
+
+导入的预设保存在 `data/plugin_data/astrbot_plugin_comfyui_draw/user_presets.json`，更新插件不会丢；`/云绘图预设` 卡片会单独列出「已导入」一栏。和内置预设、别名或其他参数重名的预设不能导入。
+
+市场索引默认是本仓库的 [`market/presets.json`](market/presets.json)，配置项 `preset_market_urls` 可以改顺序、换镜像，或指向自己维护的 presets.json（格式见 [`market/README.md`](market/README.md)）。索引 10 分钟内会复用缓存，`/预设搜索 刷新` 强制重新拉取。
 
 ### 接入 Sub2API Antigravity
 

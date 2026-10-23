@@ -539,5 +539,14 @@
     "description": "合并转发里显示的发送者昵称",
     "hint": "转发卡片内每条消息显示的名字，默认「AI画师」。可改成你的 bot 人设名，如「智乃」。",
     "default": "AI画师"
+  },
+  "preset_market_urls": {
+    "type": "list",
+    "description": "预设市场索引地址",
+    "hint": "/预设搜索 从这些地址拉取预设列表，按顺序尝试，前一个连不上就换下一个。默认是 GitHub 原始地址和 jsDelivr 镜像；国内访问慢可以把镜像放到前面，或换成自己的 presets.json 地址（只支持 https）。",
+    "default": [
+      "https://raw.githubusercontent.com/koichinoi/astrbot_plugin_comfyui_draw/main/market/presets.json",
+      "https://cdn.jsdelivr.net/gh/koichinoi/astrbot_plugin_comfyui_draw@main/market/presets.json"
+    ]
   }
 }
