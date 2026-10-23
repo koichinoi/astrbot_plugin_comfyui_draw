@@ -318,6 +318,22 @@ CLOUD_PRESET_CARD_TMPL = """
       {% endfor %}
     </div>
 
+    {% if imported_items %}
+    <div class="section-h serif">📥 已导入</div>
+    <div class="grid">
+      {% for item in imported_items %}
+      <div class="preset">
+        <div class="preset-top">
+          <span class="name">{{ item.icon | e }} {{ item.name | e }}</span>
+          <span class="flag">--{{ item.name | e }}</span>
+        </div>
+        <div class="desc">{{ item.desc | e }}</div>
+        <div class="size">推荐尺寸 · {{ item.size | e }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="usage">
       <div class="usage-h serif">使用示例</div>
       <div class="example">/云绘图 银发少女，蓝色连衣裙 --巫女</div>

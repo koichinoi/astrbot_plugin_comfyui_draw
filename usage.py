@@ -146,12 +146,14 @@ class UsageMixin:
             return default
 
     def _save_json(self, path, data):
+        """原子写入 JSON，成功返回 True。"""
         tmp = path + ".tmp"
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
             os.replace(tmp, path)
+            return True
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[comfyui_draw] 保存 {path} 失败：{e}")
             try:
@@ -159,6 +161,7 @@ class UsageMixin:
                     os.remove(tmp)
             except Exception:  # noqa: BLE001
                 pass
+            return False
 
     def _daily_limit(self, kind):
         key = "daily_limit_cloud" if kind == "cloud" else "daily_limit_local"

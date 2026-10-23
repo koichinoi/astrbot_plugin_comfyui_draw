@@ -19,6 +19,7 @@ from . import presets
 from .cloud_backend import CloudBackendMixin
 from .comfy_backend import ComfyBackendMixin
 from .draw_queue import DrawCancelled
+from .market import MARKET_PAGE_SIZE, PresetMarketMixin
 from .errors import ComfyUIError, DrawRejected, GeminiTextOnlyError  # noqa: F401（测试和旧代码从 main 导入）
 from .usage import UsageMixin
 from .templates import (
@@ -33,7 +34,7 @@ from .templates import (
 ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
-class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
+class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyBackendMixin, Star):
     # 预设数据见 presets.py，这里保留同名类属性以兼容原有调用。
     FLAG_ALIASES = presets.FLAG_ALIASES
     SIZE_PRESETS = presets.SIZE_PRESETS
@@ -52,6 +53,8 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
         self._daily_me_pending = set()
         # 「每日二次元的我」使用记录（{"date": "YYYY-MM-DD", "used": {uid: 1}}，跨天自动重置）
         self._daily_me = self._daily_me_load()
+        # 从预设市场导入的预设（data 目录持久化），合并到实例上的预设表
+        self._refresh_imported_presets()
 
     # ------------------------------------------------------------------ #
     # 访问控制（个人白名单 / 群白名单；超级用户不受限）
@@ -1519,6 +1522,8 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                     {"cmd": "/绘图队列 [取消 编号]", "desc": "查看谁在画、谁在排队；可取消自己的任务", "admin": False},
                     {"cmd": "/我的绘图", "desc": "查看自己最近的出图记录和今日剩余次数", "admin": False},
                     {"cmd": "/云绘图预设", "desc": "查看巫女、符卡、手办、海报等云绘图快捷预设", "admin": False},
+                    {"cmd": "/预设搜索 [关键词]", "desc": "在预设市场搜索云绘图预设，再用 /预设导入 编号 导入", "admin": True},
+                    {"cmd": "/预设删除 <名字>", "desc": "删除导入的预设（内置预设不能删）", "admin": True},
                     {"cmd": "/云绘图切换 [方案] [模型]", "desc": "查看云绘图方案；切换方案或模型仅限管理员", "admin": True},
                     {"cmd": "/绘图默认 [工作流名]", "desc": "查看默认工作流；切换仅限管理员", "admin": True},
                     {"cmd": "/二次元的我重置", "desc": "清空今日抽取记录，可重抽", "admin": True},
@@ -1759,6 +1764,123 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             return
         yield event.plain_result(self._cloud_preset_text())
 
+    # ------------------------------------------------------------------ #
+    # 预设市场（仅管理员）：/预设搜索 → /预设导入 → /预设删除
+    # ------------------------------------------------------------------ #
+    @filter.command("预设搜索", alias={"搜索预设", "presetsearch"})
+    async def preset_search(self, event: AstrMessageEvent):
+        """在预设市场按关键词搜索云绘图预设，结果编号供 /预设导入 使用。"""
+        if not self._is_admin(event):
+            yield await self._text_result(event, "只有管理员能搜索和导入预设。")
+            return
+        raw = self._strip_command(event.message_str, {"预设搜索", "搜索预设", "presetsearch"})
+        keyword = raw.strip()
+        try:
+            items = await self._market_index(force=keyword in ("刷新", "refresh"))
+        except ComfyUIError as e:
+            yield await self._text_result(event, f"❌ {e}")
+            return
+        if keyword in ("刷新", "refresh"):
+            keyword = ""
+        found = self._market_match(items, keyword)
+        if not found:
+            yield await self._text_result(event, f"预设市场里没有找到「{keyword}」相关的预设，换个关键词试试，或不带关键词查看全部。")
+            return
+        shown = found[:MARKET_PAGE_SIZE]
+        if not hasattr(self, "_market_last"):
+            self._market_last = {}
+        self._market_last[self._user_id(event)] = [item["name"] for item in shown]
+        rows, lines = [], []
+        for i, item in enumerate(shown, 1):
+            status = self._market_status(item)
+            rows.append({"name": f"{i}. {item['icon']} {item['name']}", "desc": f"{item['desc']}（{item['size']}）", "tag": status})
+            lines.append(f"{i}. {item['name']} — {item['desc']}（{item['size']}）" + (f"［{status}］" if status else ""))
+        more = f"共 {len(found)} 个，只显示前 {MARKET_PAGE_SIZE} 个，可以加关键词缩小范围" if len(found) > len(shown) else f"共 {len(found)} 个"
+        tips = ["导入：/预设导入 编号（可多个，空格隔开）或 /预设导入 名字", "删除：/预设删除 名字", more]
+        title = f"「{keyword}」的搜索结果" if keyword else "全部预设"
+        yield await self._info_card_result(event, {
+            "title": "预设市场",
+            "subtitle": title,
+            "sections": [{"title": "📦 可导入的预设", "rows": rows}],
+            "tips": tips,
+        }, "\n".join([f"📦 {title}", *lines, "", *tips]))
+
+    @filter.command("预设导入", alias={"导入预设", "presetimport"})
+    async def preset_import(self, event: AstrMessageEvent):
+        """把预设市场里的预设导入到本地，之后可以像内置预设一样用 --名字。"""
+        if not self._is_admin(event):
+            yield await self._text_result(event, "只有管理员能搜索和导入预设。")
+            return
+        args = self._strip_command(event.message_str, {"预设导入", "导入预设", "presetimport"}).split()
+        if not args:
+            yield await self._text_result(event, "用法：先 /预设搜索 关键词，再 /预设导入 编号（可多个）或 /预设导入 名字")
+            return
+        try:
+            index = {item["name"]: item for item in await self._market_index()}
+        except ComfyUIError as e:
+            yield await self._text_result(event, f"❌ {e}")
+            return
+        last = getattr(self, "_market_last", {}).get(self._user_id(event), [])
+        stored = self._load_user_presets()
+        builtin = self._builtin_preset_words()
+        done, failed = [], []
+        for arg in args:
+            name = last[int(arg) - 1] if arg.isdigit() and 0 < int(arg) <= len(last) else arg
+            item = index.get(name)
+            if not item:
+                failed.append(f"{arg}（市场里没有，编号以最近一次搜索为准）")
+            elif name.lower() in builtin:
+                failed.append(f"{name}（和内置预设重名）")
+            else:
+                stored[name] = {k: v for k, v in item.items() if k != "name"}
+                stored[name]["imported_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                done.append(name)
+        lines = []
+        if done:
+            if not self._save_json(self._user_presets_path(), stored):
+                yield await self._text_result(event, "❌ 保存导入的预设失败，请查看日志。")
+                return
+            self._refresh_imported_presets()
+            lines.append("✅ 已导入：" + "、".join(f"--{n}" for n in done))
+            lines.append(f"用法：/云绘图 银发少女 --{done[0]}，/云绘图预设 里能看到全部已导入预设。")
+        if failed:
+            lines.append("⚠️ 没有导入：" + "；".join(failed))
+        yield await self._text_result(event, "\n".join(lines))
+
+    @filter.command("预设删除", alias={"删除预设", "presetdelete"})
+    async def preset_delete(self, event: AstrMessageEvent):
+        """删除导入的预设；内置预设不能删除。"""
+        if not self._is_admin(event):
+            yield await self._text_result(event, "只有管理员能删除导入的预设。")
+            return
+        args = self._strip_command(event.message_str, {"预设删除", "删除预设", "presetdelete"}).split()
+        imported = self._imported_preset_names()
+        if not args:
+            have = "、".join(imported) if imported else "（还没有导入任何预设）"
+            yield await self._text_result(event, f"用法：/预设删除 名字（可多个）\n已导入：{have}")
+            return
+        stored = self._load_user_presets()
+        done, failed = [], []
+        for arg in args:
+            name = self.CLOUD_PROMPT_PRESET_ALIASES.get(arg.lower(), arg)
+            if name in stored:
+                stored.pop(name)
+                done.append(name)
+            elif name in presets.CLOUD_PROMPT_PRESETS:
+                failed.append(f"{name}（内置预设不能删除）")
+            else:
+                failed.append(f"{arg}（没有导入过）")
+        lines = []
+        if done:
+            if not self._save_json(self._user_presets_path(), stored):
+                yield await self._text_result(event, "❌ 保存失败，请查看日志。")
+                return
+            self._refresh_imported_presets()
+            lines.append("🗑️ 已删除：" + "、".join(done))
+        if failed:
+            lines.append("⚠️ 没有删除：" + "；".join(failed))
+        yield await self._text_result(event, "\n".join(lines))
+
     CLOUD_PROVIDER_LABELS = {
         "auto": "OpenAI 兼容（自动）",
         "openai-compatible": "OpenAI 兼容",
@@ -1912,14 +2034,19 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
     def _cloud_preset_text(self):
         """云绘图预设的文字兜底内容。"""
         lines = ["⛩️ 云绘图快捷预设", "", "【博丽神社限定】"]
-        groups = {True: [], False: []}
+        imported = set(self._imported_preset_names())
+        groups = {"reimu": [], "builtin": [], "imported": []}
         for name, item in self.CLOUD_PROMPT_PRESETS.items():
-            groups[name in presets.REIMU_PRESET_THUMBS].append(
-                f"--{name}　{item['desc']}（{item['size']}）"
+            group = "reimu" if name in presets.REIMU_PRESET_THUMBS else (
+                "imported" if name in imported else "builtin"
             )
-        lines.extend(groups[True])
+            groups[group].append(f"--{name}　{item['desc']}（{item['size']}）")
+        lines.extend(groups["reimu"])
         lines.extend(["", "【通用画风】"])
-        lines.extend(groups[False])
+        lines.extend(groups["builtin"])
+        if groups["imported"]:
+            lines.extend(["", "【已导入】"])
+            lines.extend(groups["imported"])
         lines.extend([
             "",
             "示例：/云绘图 银发少女，蓝色连衣裙 --手办",
@@ -1932,16 +2059,19 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
 
     async def _render_cloud_preset_card(self):
         """渲染云绘图预设图片卡片；失败返回 None。"""
-        reimu_items, items = [], []
+        reimu_items, items, imported_items = [], [], []
+        imported = set(self._imported_preset_names())
         for name, item in self.CLOUD_PROMPT_PRESETS.items():
             entry = {
                 "name": name,
-                "icon": presets.CLOUD_PRESET_ICONS.get(name, "🎨"),
+                "icon": presets.CLOUD_PRESET_ICONS.get(name) or item.get("icon") or "🎨",
                 "desc": item["desc"],
                 "size": item["size"],
             }
             thumb = presets.REIMU_PRESET_THUMBS.get(name)
-            if thumb is None:
+            if name in imported:
+                imported_items.append(entry)
+            elif thumb is None:
                 items.append(entry)
             else:
                 entry["thumb"] = self._asset_data_uri(thumb)
@@ -1952,6 +2082,7 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
                 {
                     "reimu_items": reimu_items,
                     "items": items,
+                    "imported_items": imported_items,
                     "illust": self._asset_data_uri("reimu_avatar.jpg"),
                     "scale": 2,
                 },
@@ -2496,6 +2627,8 @@ class ComfyUIDrawPlugin(UsageMixin, CloudBackendMixin, ComfyBackendMixin, Star):
             "/云绘图 <提示词> [参数]  云端出图；有原图时自动图片编辑（别名 gptdraw）\n"
             "/变手办                 引用/附带原图，一键转换成手办（别名 手办化）\n"
             "/云绘图预设             查看巫女、符卡、手办等快捷预设\n"
+            "/预设搜索 [关键词]      在预设市场搜索预设，/预设导入 编号 导入（仅管理员）\n"
+            "/预设删除 <名字>        删除导入的预设（仅管理员）\n"
             "/云绘图切换 [方案] [模型]  查看 / 切换云绘图接口方案（切换仅管理员）\n"
             "/云绘图模型 [模型名]    查看 / 修改当前方案的模型（修改仅管理员）\n"
             "/绘图列表              查看可用工作流（别名 drawlist）\n"
