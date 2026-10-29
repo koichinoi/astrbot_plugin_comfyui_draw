@@ -8,11 +8,11 @@
 </h1>
 
 <p align="center">
-  <b>博丽神社的画室</b> ── 让 <a href="https://github.com/AstrBotDevs/AstrBot">AstrBot</a> 用 ComfyUI 工作流、GPT-Image 或 Antigravity/Gemini 画画
+  <b>博丽神社的画室</b> ── 让 <a href="https://github.com/AstrBotDevs/AstrBot">AstrBot</a> 用 ComfyUI、GPT-Image、Antigravity/Gemini 或 NovelAI 画画
 </p>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.16.0-d6303f?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.17.0-d6303f?style=flat-square">
   <img alt="AstrBot" src="https://img.shields.io/badge/AstrBot-plugin-c8283a?style=flat-square">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-workflow-b11f31?style=flat-square">
   <img alt="cloud" src="https://img.shields.io/badge/云绘图-GPT--Image%20%7C%20Gemini-e0707b?style=flat-square">
@@ -26,7 +26,7 @@
 | | |
 | --- | --- |
 | 🎨 **本地 ComfyUI 出图** | 把自己的工作流导出成 API 格式丢进文件夹，`/绘图 提示词` 就能用；支持多工作流切换、参数注入、LoRA 叠加、图生视频。 |
-| ☁️ **云绘图** | `/云绘图` 接 GPT-Image 或 Sub2API Antigravity/Gemini；引用或附带原图时自动改成图片编辑。 |
+| ☁️ **云绘图** | `/云绘图` 接 GPT-Image、Sub2API Antigravity/Gemini 或 NovelAI（NAI）；引用或附带原图时自动切换编辑 / 重绘。 |
 | 🧸 **一键预设** | `--巫女`、`--符卡`、`--手办`、`--黏土`、`--像素`… 二十多种风格预设（含 4 个博丽神社限定），`/变手办` 直接把原图变成收藏级手办。 |
 | 🎀 **博丽灵梦风卡片** | 帮助、工作流列表、ComfyUI 状态、云绘图方案，连报错和提示都用红白巫女风格的图片卡片回复，渲染失败自动退回文字。 |
 | 🌸 **二次元的我** | 每人每天抽一张自己的二次元形象，附资料卡。 |
@@ -74,6 +74,7 @@ AstrBot/
         └── astrbot_plugin_comfyui_draw/
             ├── main.py            # 指令入口
             ├── cloud_backend.py   # 云端绘图接口
+            ├── nai_backend.py     # NovelAI 原生请求与 ZIP 图片解码
             ├── comfy_backend.py   # 本地 ComfyUI 与工作流注入
             ├── usage.py           # 排队、限流、每日次数与出图记录
             ├── draw_queue.py
@@ -124,7 +125,7 @@ AstrBot/
 | `help_card_theme` | `/绘图帮助` 卡片主题：`默认`（淡紫蓝画室）、`神社`（朱红和纸、鸟居与注连绳）或 `博丽灵梦`（红白巫女、蝴蝶结、阴阳玉与赛钱箱，新安装的默认值）。可用 `/绘图主题` 在线切换。 |
 | `active_cloud_profile` | 当前使用的云绘图方案名；留空使用下面的默认云绘图配置。可用 `/云绘图切换` 在线修改。 |
 | `cloud_profiles` | 云绘图方案列表，每套可单独设置接口类型、地址、Key 和模型；留空项沿用默认配置。方案填了自己的地址时必须同时填 Key，不会借用顶层 Key。 |
-| `openai_image_provider` | 云端绘图接口类型：`auto`、`openai-compatible` 或 `sub2api-antigravity`。 |
+| `openai_image_provider` | 云端绘图接口类型：`auto`、`openai-compatible`、`sub2api-antigravity` 或 `novelai`。 |
 | `openai_image_base_url` | 云端绘图接口基址。`auto` 模式下根地址返回 404/405 时会自动改试 `/v1` 路径。默认留空。 |
 | `openai_image_api_key` | 云端绘图通用 API Key（Bearer Token）。`auto` 模式始终使用它；其他接口类型的专属 Key 留空时也使用它。**按量付费，调用会消耗额度。** |
 | `openai_compatible_api_key` / `sub2api_antigravity_api_key` | OpenAI 兼容和 Sub2API Antigravity 的专属 API Key，按 `openai_image_provider`（或方案的接口类型）自动选用；留空沿用通用 Key。 |
@@ -286,7 +287,7 @@ AstrBot/
 - 想每次都加某个 LoRA：在配置 `default_loras` 里填（每行一个 `名称` 或 `名称:权重`）。
 - 注意：插入的是「仅模型」LoRA（影响 UNet），不改 CLIP/文本编码；绝大多数画风 LoRA 这样就够。LoRA 的触发词仍要自己写进提示词。
 
-## 云端绘图（GPT-Image / Antigravity，可选）
+## 云端绘图（GPT-Image / Antigravity / NAI，可选）
 
 除了本地 ComfyUI，插件还支持调用 OpenAI 兼容的云端图片接口（如 `gpt-image-2`）和 Sub2API 的 Antigravity/Gemini 原生图片接口。
 
@@ -365,6 +366,43 @@ AstrBot/
 导入的预设保存在 `data/plugin_data/astrbot_plugin_comfyui_draw/user_presets.json`，更新插件不会丢；`/云绘图预设` 卡片会单独列出「已导入」一栏。和内置预设、别名或其他参数重名的预设不能导入。
 
 市场索引默认是本仓库的 [`market/presets.json`](market/presets.json)，配置项 `preset_market_urls` 可以改顺序、换镜像，或指向自己维护的 presets.json（格式见 [`market/README.md`](market/README.md)）。索引 10 分钟内会复用缓存，`/预设搜索 刷新` 强制重新拉取。
+
+### 接入 NovelAI（NAI）
+
+NAI 使用独立的原生接口。接口对接参考 [koichinoi/nai-plugin](https://github.com/koichinoi/nai-plugin)，请求字段与返回格式依据 [NovelAI API schema](https://image.novelai.net/docs/doc.json)，由 `nai_backend.py` 实现 AstrBot 适配。
+
+| 配置项 | 填写内容 |
+| --- | --- |
+| `openai_image_provider` | `novelai` |
+| `nai_base_url` | 默认 `https://image.novelai.net`，也可填你信任的 NAI 兼容反向代理 |
+| `nai_api_key` | NovelAI **Persistent API Token**；在 NovelAI 账号设置中获取 |
+| `nai_model` | 默认 `nai-diffusion-5-full`，也支持下方别名 |
+| `nai_image_size` | 默认 `832x1216`，命令 `--size`、尺寸快捷参数和预设可以覆盖 |
+| `nai_steps` / `nai_scale` | 默认 23 步、CFG 6；命令 `--steps` / `--cfg` 可覆盖 |
+| `nai_seed` | 默认 `-1` 随机，0–4294967295 为固定种子，`0` 有效 |
+| `nai_negative_prompt` | NAI 专用默认负面词，命令 `--uc` 或 `--neg` 可覆盖 |
+| `nai_limit_cost` | 默认开启，单张不超过 1048576 像素、28 步；关闭可用至 3145728 像素、50 步 |
+| `nai_strength` / `nai_noise` | 单图重绘的强度与噪声，默认 0.7 / 0.2，范围 0–1 |
+| `nai_proxy_url` | 可选正向代理，如 `http://127.0.0.1:7890`，相对于 AstrBot 所在机器 |
+
+支持的模型别名：`v5` / `v5-curated`、`v4.5` / `v4.5-curated`、`v4` / `v4-curated`、`v3`、`furry-v3`；也可以填写服务实际支持的完整 API 模型名。V4/V4.5/V5 会自动构建对应的正负提示结构，V3 使用旧格式。
+
+```text
+/云绘图 博丽灵梦，红白巫女服，站在盛开的樱花树下，完整树冠和树干清晰可见 --model v5 --竖图
+/云绘图 1girl, silver hair, shrine, cherry blossoms --model v4.5 --uc lowres, bad hands, watermark --seed 0 --steps 23 --cfg 6
+/云绘图 银发少女 --巫女 --model v5-curated
+# 引用或附带一张原图后发送（普通图生图）：
+/云绘图 换成冬日服装 --strength 0.55 --noise 0.1
+```
+
+- V5 可直接尝试中文自然语言；旧模型建议使用英文标签。NAI 不使用 GPT-Image 的 `quality` 或 Gemini 的 `1K/2K/4K` 参数，改用 `--size`、`--steps`、`--cfg`。
+- 尺寸向下对齐到 64 的倍数；超出像素预算时按比例缩小。图生图优先参考原图比例，但不保证完全相同的像素尺寸或人物身份。采样器与调度可通过 `nai_sampler` / `nai_noise_schedule` 配置，命令也支持 `--sampler` / `--schedule`。
+- 每次 API 请求固定 `n_samples=1`；`--batch N` 会逐张请求并共享总超时预算。同一 Token 串行调用，不自动重试超时、限流或生成失败；后续失败会发送已完成图片。固定种子的批次从该种子开始递增，随机模式每张使用随机种子。
+- 正常响应支持 HTTP 201/200 的 ZIP 图片包和官方 JSON `images[].image`，ZIP 仅在内存中读取，不解压到磁盘。
+- `cloud_profiles` 也能添加 `provider=novelai` 的命名方案，例如叫「NAI」；留空地址和模型使用 `nai_base_url` / `nai_model`。NAI 使用独立 Token，不会回退到通用 OpenAI/Gemini Key；方案填写独立地址时仍需填写自己的 Key。
+- `daily_me_backend=cloud` 且当前方案为 NAI 时，「二次元的我」也由 NAI 生成，保留每日限制、专用负面词、资料卡和原图。预设市场导入的提示词也可使用，实际效果取决于 NAI 模型。
+- 当前接入文生图与**单张普通图生图**，不支持多角色坐标、Vibe Transfer、Precise Reference、V5 Medium Effort、透明背景及超分。一次附带多张原图会提示只使用一张，避免误当成多图参考。
+- **像素和步数限制不代表免费**。是否扣除 Anlas、是否具备模型权限，以及 V5 的用量限制，均以账号订阅与服务实际规则为准。此次仅做离线协议模拟与回归测试，未调用用户 Token 出图。
 
 ### 接入 Sub2API Antigravity
 

@@ -925,7 +925,7 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         if width <= 0 or height <= 0:
             return None
 
-        if self._openai_image_provider() == "sub2api-antigravity":
+        if self._openai_image_provider() in {"sub2api-antigravity", "novelai"}:
             # Gemini 只接受比例与分辨率档位，先保留原比例供请求构建时映射。
             return f"{width}x{height}"
 
@@ -1121,6 +1121,8 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
 
     def _daily_me_cloud_prompt(self, prompt):
         """把标签式每日角色设定包装成更适合 GPT-Image 的自然语言指令。"""
+        if self._openai_image_provider() == "novelai":
+            return str(prompt or "").strip()
         text = (
             "Create a polished Japanese anime-style character illustration. "
             "Faithfully preserve every specified appearance, hairstyle, outfit, pose, "
@@ -1165,7 +1167,7 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
                 async for result in self._render_openai(
                     event,
                     self._daily_me_cloud_prompt(prompt),
-                    {"size": cloud_size, "batch": 1},
+                    {"size": cloud_size, "batch": 1, "negative": self._daily_me_negative_prompt()},
                     on_success=lambda: state.__setitem__("success", True),
                     caption_prefix=desc,
                     daily_card=self.config.get("daily_me_result_card", True),
@@ -1726,7 +1728,7 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         if not raw:
             yield await self._text_result(event, 
                 "用法：/云绘图 <提示词> [--手办|--头像|--海报等] [--size 1024x1024] [--batch N]\n"
-                "GPT-Image / DALL·E 用自然语言描述即可（支持中文）。size / quality / style 的可选值以你所用接口的文档为准；"
+                "按当前方案调用 GPT-Image、Gemini 或 NAI。NAI 可用 --model v5、--uc 负面词、--steps、--cfg、--seed；"
                 "一次张数上限跟随 max_batch_size 配置。发送 /云绘图预设 可查看所有快捷预设。\n"
                 "图生图：引用或附带原图发送 /变手办，或 /云绘图 --毛绒。"
             )
@@ -1895,6 +1897,7 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         "auto": "OpenAI 兼容（自动）",
         "openai-compatible": "OpenAI 兼容",
         "sub2api-antigravity": "Antigravity/Gemini",
+        "novelai": "NovelAI / NAI",
     }
 
     def _cloud_profile_names(self):
@@ -2148,8 +2151,11 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         original_prompt, original_opts = prompt, dict(opts or {})
         # 开始时固定接口方案，出图途中管理员切换方案也不影响本次请求和结果卡片。
         conn = self._cloud_connection()
+        is_nai = conn["provider"] == "novelai"
         try:
             opts = dict(opts or {})
+            if is_nai and opts.get("model"):
+                conn = {**conn, "model": self._nai_model(opts["model"])}
             size_was_explicit = bool(str(opts.get("size") or "").strip())
             source_images = []
             if allow_image_edit:
@@ -2206,10 +2212,19 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
         quality = (opts.get("quality") or "").strip() or str(self.config.get("openai_image_quality", "") or "").strip() or None
         style = (opts.get("style") or "").strip() or str(self.config.get("openai_image_style", "") or "").strip() or None
         is_antigravity = conn["provider"] == "sub2api-antigravity"
-        if is_antigravity:
-            # GPT-Image 的 high/hd 等默认值不应覆盖 Gemini 独立清晰度设置。
+        if is_nai:
+            style = (opts.get("style") or "").strip() or None
+        if is_antigravity or is_nai:
+            # OpenAI 默认质量不用于 Gemini/NAI。
             quality = (opts.get("quality") or "").strip() or None
         gemini_config = None
+        nai_parameters = None
+        if is_nai:
+            try:
+                nai_parameters = self._build_nai_payload(prompt, size_str, source_images, opts, conn["model"])["parameters"]
+            except ComfyUIError as e:
+                yield await self._text_result(event, f"❌ 参数错误：{e}")
+                return
         if is_antigravity:
             try:
                 gemini_config = self._gemini_image_config(size_str, quality)
@@ -2231,7 +2246,10 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
                 parts.append(f"方案={profile_name}")
             if preset_name:
                 parts.append(f"预设={preset_name}")
-            if gemini_config:
+            if nai_parameters:
+                parts.append(f"{nai_parameters['width']}x{nai_parameters['height']}")
+                parts.append(f"steps={nai_parameters['steps']}")
+            elif gemini_config:
                 parts.append(f"构图比例={gemini_config.get('aspectRatio', '自动')}")
                 parts.append(gemini_config["imageSize"])
             elif size_str:
@@ -2244,10 +2262,12 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
                 parts.append(f"原图={len(source_images)}张")
             parts.append(f"×{n}")
             action = "编辑原图" if source_images else "生成"
-            backend_label = "Antigravity/Gemini" if is_antigravity else "GPT-Image"
+            backend_label = "NovelAI" if is_nai else ("Antigravity/Gemini" if is_antigravity else "GPT-Image")
             progress_text = f"🎨 正在用云端 {backend_label} {action}（" + " · ".join(parts) + "）..."
 
         def run():
+            if is_nai:
+                return self._run_nai_image(prompt, size_str, n, source_images, opts, conn=conn)
             if source_images:
                 return self._run_openai_image_edit(
                     prompt, source_images, size_str, n, quality=quality, conn=conn
@@ -2302,7 +2322,7 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
             )
 
         effective = {}
-        if is_antigravity and results:
+        if (is_antigravity or is_nai) and results:
             # 卡片展示真实返回像素，不能把请求的近似比例标成实际分辨率。
             dimensions = self._image_dimensions(results[0][0])
             if dimensions:
@@ -2312,6 +2332,13 @@ class ComfyUIDrawPlugin(UsageMixin, PresetMarketMixin, CloudBackendMixin, ComfyB
             if width.isdigit() and height.isdigit():
                 effective["width"] = int(width)
                 effective["height"] = int(height)
+
+        if is_nai and nai_parameters:
+            effective.update(steps=nai_parameters["steps"], cfg=nai_parameters["scale"])
+            if results and results[0][1].startswith("nai_"):
+                actual_seed = results[0][1].split("_")[1]
+                if actual_seed.isdigit():
+                    effective["seed"] = int(actual_seed)
 
         chain = await self._build_result_chain(
             event,

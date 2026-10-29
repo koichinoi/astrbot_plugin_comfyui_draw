@@ -306,13 +306,14 @@
             "options": [
               "auto",
               "openai-compatible",
-              "sub2api-antigravity"
+              "sub2api-antigravity",
+              "novelai"
             ]
           },
           "base_url": {
             "type": "string",
             "description": "API 地址",
-            "hint": "留空则沿用 openai_image_base_url。",
+            "hint": "留空时 NAI 沿用 nai_base_url，其他类型沿用 openai_image_base_url。",
             "default": ""
           },
           "api_key": {
@@ -324,7 +325,7 @@
           "model": {
             "type": "string",
             "description": "模型名",
-            "hint": "留空则按接口类型沿用 openai_image_model 或 gemini_image_model。也可用 /云绘图模型 在线修改。",
+            "hint": "留空则按接口类型沿用 openai_image_model、gemini_image_model 或 nai_model。也可用 /云绘图模型 在线修改；NAI 支持 v5、v4.5、v3 等别名。",
             "default": ""
           }
         }
@@ -334,14 +335,65 @@
   "openai_image_provider": {
     "type": "string",
     "description": "云端绘图接口类型",
-    "hint": "sub2api-antigravity 使用 Sub2API 的 Antigravity/Gemini 原生文生图与图片编辑接口；auto 兼容普通 OpenAI 图片接口，并在根地址返回 404/405 时尝试 /v1；openai-compatible 直接拼接 /images/generations。",
+    "hint": "novelai 使用 NovelAI 原生接口和独立的 nai_* 配置；sub2api-antigravity 使用 Gemini 原生接口；auto 兼容 OpenAI 图片接口并尝试 /v1；openai-compatible 直接拼接 /images/generations。",
     "default": "auto",
     "options": [
       "auto",
       "openai-compatible",
-      "sub2api-antigravity"
+      "sub2api-antigravity",
+      "novelai"
     ]
   },
+  "nai_base_url": {
+    "type": "string",
+    "description": "NAI 绘图服务地址",
+    "hint": "NovelAI 官方绘图地址，或你信任的兼容反向代理根地址；支持填写完整 /ai/generate-image。NAI 不使用通用 OpenAI 地址。",
+    "default": "https://image.novelai.net"
+  },
+  "nai_api_key": {
+    "type": "string",
+    "description": "NAI Persistent API Token",
+    "hint": "在 NovelAI 账号设置中获取 Persistent API Token。仅 novelai 类型使用，留空时不借用 OpenAI/Gemini Key；命名方案也可单独填写 API Key。",
+    "default": ""
+  },
+  "nai_model": {
+    "type": "string",
+    "description": "NAI 默认模型",
+    "hint": "支持完整 API 模型名及 v5、v5-curated、v4.5、v4.5-curated、v4、v4-curated、v3、furry-v3 别名。以你的订阅和服务支持情况为准；命令 --model 可临时覆盖。",
+    "default": "nai-diffusion-5-full"
+  },
+  "nai_image_size": {
+    "type": "string",
+    "description": "NAI 默认图片尺寸",
+    "hint": "未手动指定尺寸或选择预设时使用。按 64 像素向下对齐，超出像素预算时等比缩小。",
+    "default": "832x1216"
+  },
+  "nai_limit_cost": {
+    "type": "bool",
+    "description": "限制 NAI 单张像素与步数",
+    "hint": "开启限制至 1048576 像素和 28 步；关闭可用至 3145728 像素和 50 步。每次 API 请求仅生成 1 张，多张命令逐张调用。不承诺免费，实际扣费取决于订阅、模型和 Anlas 额度。",
+    "default": true
+  },
+  "nai_steps": {"type": "int", "description": "NAI 默认步数", "hint": "开启限制时 1–28，关闭时 1–50；--steps 可临时覆盖。", "default": 23},
+  "nai_scale": {"type": "float", "description": "NAI 默认 CFG", "hint": "0–10；--cfg 可临时覆盖。", "default": 6.0},
+  "nai_seed": {"type": "int", "description": "NAI 默认种子", "hint": "-1 随机；固定种子范围 0–4294967295，0 有效。命令 --seed 可覆盖。", "default": -1},
+  "nai_negative_prompt": {
+    "type": "string", "description": "NAI 默认负面提示词",
+    "hint": "命令 --neg 或 --uc 可覆盖；二次元的我使用它的专用负面词。",
+    "default": "nsfw, lowres, worst quality, bad quality, blurry, jpeg artifacts, watermark, logo, signature"
+  },
+  "nai_sampler": {
+    "type": "string", "description": "NAI 默认采样器", "default": "k_euler_ancestral",
+    "options": ["k_euler_ancestral", "k_euler", "k_dpmpp_2m", "k_dpmpp_2s_ancestral", "k_dpmpp_sde", "k_dpmpp_2m_sde", "ddim_v3"]
+  },
+  "nai_noise_schedule": {
+    "type": "string", "description": "NAI 噪声调度", "default": "karras",
+    "options": ["native", "karras", "exponential", "polyexponential"]
+  },
+  "nai_cfg_rescale": {"type": "float", "description": "NAI CFG Rescale", "hint": "0–1。", "default": 0.0},
+  "nai_strength": {"type": "float", "description": "NAI 图生图重绘强度", "hint": "0–1，越高变化越大；--strength 可临时覆盖。", "default": 0.7},
+  "nai_noise": {"type": "float", "description": "NAI 图生图噪声", "hint": "0–1；--noise 可临时覆盖。", "default": 0.2},
+  "nai_proxy_url": {"type": "string", "description": "NAI 正向代理（可选）", "hint": "例如 http://127.0.0.1:7890；相对于 AstrBot 所在机器。留空直接连接，仅 NAI 请求使用。", "default": ""},
   "openai_image_base_url": {
     "type": "string",
     "description": "云端绘图 API 地址（/云绘图 用）",

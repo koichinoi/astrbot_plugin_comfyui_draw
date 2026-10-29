@@ -1,7 +1,7 @@
 name: astrbot_plugin_comfyui_draw
 display_name: ComfyUI 绘图
-desc: 通过 ComfyUI 工作流、GPT-Image 或 Sub2API Antigravity/Gemini 接口进行 AI 绘图。云绘图支持文生图、引用/附带原图自动图片编辑、一键变手办、视觉风格及 UI 设计快捷预设；本地支持工作流文件夹加载、参数注入、多工作流切换与中文自然语言转换。
-short_desc: ComfyUI、GPT-Image 与 Antigravity/Gemini 绘图
-version: v1.16.0-optimized
+desc: 支持 ComfyUI、GPT-Image、Sub2API Antigravity/Gemini 和 NovelAI（NAI）绘图。包含云端方案切换、预设市场、文生图、原图重绘及二次元的我，NAI 支持 V5/V4.5/V4/V3。
+short_desc: ComfyUI、GPT-Image、Gemini 与 NAI 绘图
+version: v1.17.0-optimized
 author: koichinoi
 repo: https://github.com/koichinoi/astrbot_plugin_comfyui_draw

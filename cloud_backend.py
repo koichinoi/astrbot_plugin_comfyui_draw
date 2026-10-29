@@ -10,9 +10,10 @@ import aiohttp
 from astrbot.api import logger
 
 from .errors import ComfyUIError, GeminiTextOnlyError
+from .nai_backend import NovelAIBackendMixin
 
 
-class CloudBackendMixin:
+class CloudBackendMixin(NovelAIBackendMixin):
     """云端绘图：接口方案、OpenAI 兼容图片接口与 Sub2API Antigravity/Gemini。混入 ComfyUIDrawPlugin 使用，依赖主类的配置读取等通用方法。"""
 
     DEFAULT_CLOUD_ART_STYLE = "日系二次元动漫插画，干净线稿，赛璐璐上色，不要真人照片或写实风格"
@@ -44,12 +45,13 @@ class CloudBackendMixin:
     # 云绘图方案：cloud_profiles 中的命名方案可覆盖顶层的地址 / Key / 模型，
     # active_cloud_profile 为空时使用顶层配置（即「默认」方案）。
     # ------------------------------------------------------------------ #
-    CLOUD_PROVIDERS = ("auto", "openai-compatible", "sub2api-antigravity")
+    CLOUD_PROVIDERS = ("auto", "openai-compatible", "sub2api-antigravity", "novelai")
     DEFAULT_CLOUD_PROFILE = "默认"
     # 每种接口类型的专属 Key；留空时沿用通用的 openai_image_api_key。
     CLOUD_PROVIDER_KEY_FIELDS = {
         "openai-compatible": "openai_compatible_api_key",
         "sub2api-antigravity": "sub2api_antigravity_api_key",
+        "novelai": "nai_api_key",
     }
 
     @classmethod
@@ -82,14 +84,21 @@ class CloudBackendMixin:
 
     @staticmethod
     def _default_cloud_model(provider):
+        if provider == "novelai":
+            return NovelAIBackendMixin.NAI_DEFAULT_MODEL
         return "gemini-3.1-flash-image" if provider == "sub2api-antigravity" else "gpt-image-2"
 
     def _global_model_key(self, provider):
+        if provider == "novelai":
+            return "nai_model"
         return "gemini_image_model" if provider == "sub2api-antigravity" else "openai_image_model"
 
     def _top_level_api_key(self, provider):
         """返回 (配置项名, Key)：优先该接口类型的专属 Key，留空再用通用 Key。"""
         field = self.CLOUD_PROVIDER_KEY_FIELDS.get(provider)
+        if provider == "novelai":
+            # NovelAI 和 OpenAI/Gemini 的凭据不可混用，缺少 NAI Token 时不借用通用 Key。
+            return field, str(self.config.get(field, "") or "").strip()
         if field:
             value = str(self.config.get(field, "") or "").strip()
             if value:
@@ -130,10 +139,14 @@ class CloudBackendMixin:
             api_key = profile_key
         elif str(profile.get("base_url", "") or "").strip():
             api_key = ""
+        base = pick("base_url", "nai_base_url" if provider == "novelai" else "openai_image_base_url")
+        if provider == "novelai":
+            base = base or self.NAI_DEFAULT_BASE
+            model = self._nai_model(model)
         return {
             "name": name,
             "provider": provider,
-            "base_url": pick("base_url", "openai_image_base_url"),
+            "base_url": base,
             "api_key": api_key,
             "api_key_field": key_field,
             "model": model,
@@ -500,6 +513,8 @@ class CloudBackendMixin:
         """调用 OpenAI 兼容的 /images/generations 接口，返回 list[(bytes, filename)]。
         conn 为本次固定的接口方案，省略时取当前方案。失败抛出 ComfyUIError / asyncio.TimeoutError。"""
         conn = conn or self._cloud_connection()
+        if conn["provider"] == "novelai":
+            return await self._run_nai_image(prompt, size, n, options={"quality": quality, "style": style}, conn=conn)
         if conn["provider"] == "sub2api-antigravity":
             return await self._run_antigravity_image(prompt, size, n, quality=quality, style=style, conn=conn)
         base, key, model = conn["base_url"].rstrip("/"), conn["api_key"], conn["model"]
@@ -554,6 +569,10 @@ class CloudBackendMixin:
     ):
         """调用 OpenAI 兼容的 /images/edits，以 multipart 上传一张或多张原图。"""
         conn = conn or self._cloud_connection()
+        if conn["provider"] == "novelai":
+            if not source_images:
+                raise ComfyUIError("NAI 图生图需要一张原图。")
+            return await self._run_nai_image(prompt, size, n, source_images, options={"quality": quality}, conn=conn)
         if conn["provider"] == "sub2api-antigravity":
             if not source_images:
                 raise ComfyUIError("图片编辑需要至少一张原图。")

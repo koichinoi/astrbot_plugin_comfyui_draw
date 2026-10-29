@@ -15,6 +15,7 @@ python tests/test_queue_and_history.py
 python tests/test_draw_switches.py
 python tests/test_reimu_presets.py
 python tests/test_preset_market.py
+python tests/test_novelai.py
 ```
 
 测试使用 AstrBot/aiohttp 替身和虚构的 API Key，不连接真实出图服务，不消耗接口额度。
@@ -33,3 +34,4 @@ python tests/test_preset_market.py
 测试会像 AstrBot 一样把插件目录作为包加载，因此 `main.py` 可以相对导入 `presets.py` 与 `templates.py`。
 - `test_reimu_presets.py`：博丽神社限定预设（巫女、参拜、御守、符卡）的参数与别名、`/云绘图预设` 灵梦风卡片分组与缺图兜底、文字兜底分组。
 - `test_preset_market.py`：预设市场索引校验（自带的 market/presets.json 不和内置预设重名）、`/预设搜索` 缓存、翻页与连不上时的提示、按编号或名字导入、导入后可用 `--名字`、重名拒绝、删除，以及 `/云绘图预设` 卡片和文字兜底的「已导入」分组。
+- `test_novelai.py`：NAI 模型与提示词结构、种子 0、图生图参数、像素与步数限制、独立 Token、ZIP/JSON 解析、错误脱敏、串行调用、批量部分结果、总超时及二次元的我集成（19 项）。

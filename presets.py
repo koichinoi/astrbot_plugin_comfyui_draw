@@ -17,6 +17,9 @@ FLAG_ALIASES = {
     "--style": "style",
     "--preset": "preset", "--预设": "preset",
     "--fw": "forward", "--forward": "forward", "--转发": "forward",
+    "--uc": "negative", "--negative_prompt": "negative",
+    "--model": "model", "--sampler": "sampler", "--schedule": "schedule",
+    "--strength": "strength", "--noise": "noise",
 }
 SIZE_PRESETS = {
     "--横图": "1216x832",
